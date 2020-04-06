@@ -46,7 +46,7 @@ abstract class ParametricCurve<T> {
   }
 
   @override
-  String toString() => '$runtimeType';
+  String toString() => objectRuntimeType(this, 'ParametricCurve');
 }
 
 /// An parametric animation easing curve, i.e. a mapping of the unit interval to
@@ -139,7 +139,7 @@ class SawTooth extends Curve {
 
   @override
   String toString() {
-    return '$runtimeType($count)';
+    return '${objectRuntimeType(this, 'SawTooth')}($count)';
   }
 }
 
@@ -190,8 +190,8 @@ class Interval extends Curve {
   @override
   String toString() {
     if (curve is! _Linear)
-      return '$runtimeType($begin\u22EF$end)\u27A9$curve';
-    return '$runtimeType($begin\u22EF$end)';
+      return '${objectRuntimeType(this, 'Interval')}($begin\u22EF$end)\u27A9$curve';
+    return '${objectRuntimeType(this, 'Interval')}($begin\u22EF$end)';
   }
 }
 
@@ -300,7 +300,7 @@ class Cubic extends Curve {
 
   @override
   String toString() {
-    return '$runtimeType(${a.toStringAsFixed(2)}, ${b.toStringAsFixed(2)}, ${c.toStringAsFixed(2)}, ${d.toStringAsFixed(2)})';
+    return '${objectRuntimeType(this, 'Cubic')}(${a.toStringAsFixed(2)}, ${b.toStringAsFixed(2)}, ${c.toStringAsFixed(2)}, ${d.toStringAsFixed(2)})';
   }
 }
 
@@ -318,7 +318,7 @@ class Cubic extends Curve {
 /// part of the curve, or hardly at all in another part of the curve, depending
 /// on the definition of the curve.
 ///
-/// {@tool sample --template=stateless_widget_material}
+/// {@tool dartpad --template=stateless_widget_material}
 /// This example shows how to use a [Curve2D] to modify the position of a widget
 /// so that it can follow an arbitrary path.
 ///
@@ -413,7 +413,7 @@ class Cubic extends Curve {
 ///         child: CircleAvatar(
 ///           backgroundColor: Colors.yellow,
 ///           child: DefaultTextStyle(
-///             style: Theme.of(context).textTheme.title,
+///             style: Theme.of(context).textTheme.headline6,
 ///             child: Text("B"), // Buzz, buzz!
 ///           ),
 ///         ),
@@ -1087,7 +1087,7 @@ class FlippedCurve extends Curve {
 
   @override
   String toString() {
-    return '$runtimeType($curve)';
+    return '${objectRuntimeType(this, 'FlippedCurve')}($curve)';
   }
 }
 
@@ -1193,7 +1193,7 @@ class ElasticInCurve extends Curve {
 
   @override
   String toString() {
-    return '$runtimeType($period)';
+    return '${objectRuntimeType(this, 'ElasticInCurve')}($period)';
   }
 }
 
@@ -1220,7 +1220,7 @@ class ElasticOutCurve extends Curve {
 
   @override
   String toString() {
-    return '$runtimeType($period)';
+    return '${objectRuntimeType(this, 'ElasticOutCurve')}($period)';
   }
 }
 
@@ -1252,7 +1252,7 @@ class ElasticInOutCurve extends Curve {
 
   @override
   String toString() {
-    return '$runtimeType($period)';
+    return '${objectRuntimeType(this, 'ElasticInOutCurve')}($period)';
   }
 }
 
@@ -1334,7 +1334,7 @@ class Curves {
   /// By default is the curve used to animate pages on iOS back to their original
   /// position if a swipe gesture is ended midway through a swipe.
   ///
-  /// {@animation 464 192 https://flutter.github.io/assets-for-api-docs/assets/animation/fast_linear_to_slow_ease_in.mp4}
+  /// {@animation 464 192 https://flutter.github.io/assets-for-api-docs/assets/animation/curve_fast_linear_to_slow_ease_in.mp4}
   static const Cubic fastLinearToSlowEaseIn = Cubic(0.18, 1.0, 0.04, 1.0);
 
   /// A cubic animation curve that speeds up quickly and ends slowly.
@@ -1452,7 +1452,7 @@ class Curves {
   ///
   /// A symmetric animation to [easeInToLinear].
   ///
-  /// {@animation 464 192 https://flutter.github.io/assets-for-api-docs/assets/animation/linear_to_ease_out.mp4}
+  /// {@animation 464 192 https://flutter.github.io/assets-for-api-docs/assets/animation/curve_linear_to_ease_out.mp4}
   static const Cubic linearToEaseOut = Cubic(0.35, 0.91, 0.33, 0.97);
 
   /// A cubic animation curve that starts quickly and ends slowly. This is
@@ -1657,6 +1657,10 @@ class Curves {
   /// animation to finish, and the negative effects of motion are minimized.
   ///
   /// {@animation 464 192 https://flutter.github.io/assets-for-api-docs/assets/animation/curve_fast_out_slow_in.mp4}
+  ///
+  /// See also:
+  ///
+  ///  * [standardEasing], the name for this curve in the Material specification.
   static const Cubic fastOutSlowIn = Cubic(0.4, 0.0, 0.2, 1.0);
 
   /// A cubic animation curve that starts quickly, slows down, and then ends

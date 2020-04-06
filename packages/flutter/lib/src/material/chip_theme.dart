@@ -168,7 +168,7 @@ class ChipTheme extends InheritedTheme {
 ///  * [Theme] widget, which performs a similar function to [ChipTheme],
 ///    but for overall themes.
 ///  * [ThemeData], which has a default [ChipThemeData].
-class ChipThemeData extends Diagnosticable {
+class ChipThemeData with Diagnosticable {
   /// Create a [ChipThemeData] given a set of exact values. All the values
   /// must be specified except for [shadowColor], [selectedShadowColor],
   /// [elevation], and [pressElevation], which may be null.
@@ -510,7 +510,7 @@ class ChipThemeData extends Diagnosticable {
     final ChipThemeData defaultData = ChipThemeData.fromDefaults(
       secondaryColor: defaultTheme.primaryColor,
       brightness: defaultTheme.brightness,
-      labelStyle: defaultTheme.textTheme.body2,
+      labelStyle: defaultTheme.textTheme.bodyText1,
     );
     properties.add(ColorProperty('backgroundColor', backgroundColor, defaultValue: defaultData.backgroundColor));
     properties.add(ColorProperty('deleteIconColor', deleteIconColor, defaultValue: defaultData.deleteIconColor));

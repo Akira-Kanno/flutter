@@ -4,10 +4,10 @@
 
 import 'package:args/command_runner.dart';
 import 'package:file/memory.dart';
-import 'package:flutter_tools/src/base/common.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/build_system/build_system.dart';
 import 'package:flutter_tools/src/build_system/targets/dart.dart';
+import 'package:flutter_tools/src/build_system/targets/icon_tree_shaker.dart';
 import 'package:flutter_tools/src/bundle.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/build_bundle.dart';
@@ -33,7 +33,7 @@ void main() {
     when(
       mockBundleBuilder.build(
         platform: anyNamed('platform'),
-        buildMode: anyNamed('buildMode'),
+        buildInfo: anyNamed('buildInfo'),
         mainPath: anyNamed('mainPath'),
         manifestPath: anyNamed('manifestPath'),
         applicationKernelFilePath: anyNamed('applicationKernelFilePath'),
@@ -48,6 +48,7 @@ void main() {
         extraGenSnapshotOptions: anyNamed('extraGenSnapshotOptions'),
         fileSystemRoots: anyNamed('fileSystemRoots'),
         fileSystemScheme: anyNamed('fileSystemScheme'),
+        treeShakeIcons: anyNamed('treeShakeIcons'),
       ),
     ).thenAnswer((_) => Future<void>.value());
   });
@@ -109,7 +110,7 @@ void main() {
       'bundle',
       '--no-pub',
       '--target-platform=windows-x64',
-    ]), throwsA(isInstanceOf<ToolExit>()));
+    ]), throwsToolExit());
   }, overrides: <Type, Generator>{
     FileSystem: () => MemoryFileSystem(),
     ProcessManager: () => FakeProcessManager.any(),
@@ -127,7 +128,7 @@ void main() {
       'bundle',
       '--no-pub',
       '--target-platform=linux-x64',
-    ]), throwsA(isInstanceOf<ToolExit>()));
+    ]), throwsToolExit());
   }, overrides: <Type, Generator>{
     FileSystem: () => MemoryFileSystem(),
     ProcessManager: () => FakeProcessManager.any(),
@@ -145,7 +146,7 @@ void main() {
       'bundle',
       '--no-pub',
       '--target-platform=darwin-x64',
-    ]), throwsA(isInstanceOf<ToolExit>()));
+    ]), throwsToolExit());
   }, overrides: <Type, Generator>{
     FileSystem: () => MemoryFileSystem(),
     ProcessManager: () => FakeProcessManager.any(),
@@ -211,13 +212,14 @@ void main() {
     globals.fs.file('pubspec.yaml').createSync();
     globals.fs.file('.packages').createSync();
     final CommandRunner<void> runner = createTestCommandRunner(BuildBundleCommand());
-    when(buildSystem.build(any, any)).thenAnswer((Invocation invocation) async {
+    when(globals.buildSystem.build(any, any)).thenAnswer((Invocation invocation) async {
       final Environment environment = invocation.positionalArguments[1] as Environment;
       expect(environment.defines, <String, String>{
         kTargetFile: globals.fs.path.join('lib', 'main.dart'),
         kBuildMode: 'debug',
         kTargetPlatform: 'android-arm',
         kTrackWidgetCreation: 'true',
+        kIconTreeShakerFlag: null,
       });
 
       return BuildResult(success: true);

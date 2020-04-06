@@ -3,67 +3,14 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:math' show Random, max;
+import 'dart:math' show max;
 
 import 'package:intl/intl.dart';
 import 'package:meta/meta.dart';
 
 import '../convert.dart';
 import '../globals.dart' as globals;
-import 'context.dart';
 import 'file_system.dart';
-import 'io.dart' as io;
-import 'terminal.dart';
-
-const BotDetector _kBotDetector = BotDetector();
-
-class BotDetector {
-  const BotDetector();
-
-  bool get isRunningOnBot {
-    if (
-        // Explicitly stated to not be a bot.
-        globals.platform.environment['BOT'] == 'false'
-
-        // Set by the IDEs to the IDE name, so a strong signal that this is not a bot.
-        || globals.platform.environment.containsKey('FLUTTER_HOST')
-        // When set, GA logs to a local file (normally for tests) so we don't need to filter.
-        || globals.platform.environment.containsKey('FLUTTER_ANALYTICS_LOG_FILE')
-    ) {
-      return false;
-    }
-
-    return globals.platform.environment['BOT'] == 'true'
-
-        // https://docs.travis-ci.com/user/environment-variables/#Default-Environment-Variables
-        || globals.platform.environment['TRAVIS'] == 'true'
-        || globals.platform.environment['CONTINUOUS_INTEGRATION'] == 'true'
-        || globals.platform.environment.containsKey('CI') // Travis and AppVeyor
-
-        // https://www.appveyor.com/docs/environment-variables/
-        || globals.platform.environment.containsKey('APPVEYOR')
-
-        // https://cirrus-ci.org/guide/writing-tasks/#environment-variables
-        || globals.platform.environment.containsKey('CIRRUS_CI')
-
-        // https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref-env-vars.html
-        || (globals.platform.environment.containsKey('AWS_REGION') &&
-            globals.platform.environment.containsKey('CODEBUILD_INITIATOR'))
-
-        // https://wiki.jenkins.io/display/JENKINS/Building+a+software+project#Buildingasoftwareproject-belowJenkinsSetEnvironmentVariables
-        || globals.platform.environment.containsKey('JENKINS_URL')
-
-        // Properties on Flutter's Chrome Infra bots.
-        || globals.platform.environment['CHROME_HEADLESS'] == '1'
-        || globals.platform.environment.containsKey('BUILDBOT_BUILDERNAME')
-        || globals.platform.environment.containsKey('SWARMING_TASK_ID');
-  }
-}
-
-bool get isRunningOnBot {
-  final BotDetector botDetector = context.get<BotDetector>() ?? _kBotDetector;
-  return botDetector.isRunningOnBot;
-}
 
 /// Convert `foo_bar` to `fooBar`.
 String camelCase(String str) {
@@ -102,27 +49,8 @@ String getEnumName(dynamic enumItem) {
   return index == -1 ? name : name.substring(index + 1);
 }
 
-File getUniqueFile(Directory dir, String baseName, String ext) {
-  final FileSystem fs = dir.fileSystem;
-  int i = 1;
-
-  while (true) {
-    final String name = '${baseName}_${i.toString().padLeft(2, '0')}.$ext';
-    final File file = fs.file(globals.fs.path.join(dir.path, name));
-    if (!file.existsSync()) {
-      return file;
-    }
-    i++;
-  }
-}
-
 String toPrettyJson(Object jsonable) {
   return const JsonEncoder.withIndent('  ').convert(jsonable) + '\n';
-}
-
-/// Return a String - with units - for the size in MB of the given number of bytes.
-String getSizeAsMB(int bytesLength) {
-  return '${(bytesLength / (1024 * 1024)).toStringAsFixed(1)}MB';
 }
 
 final NumberFormat kSecondsFormat = NumberFormat('0.0');
@@ -137,11 +65,9 @@ String getElapsedAsMilliseconds(Duration duration) {
   return '${kMillisecondsFormat.format(duration.inMilliseconds)}ms';
 }
 
-/// Return a relative path if [fullPath] is contained by the cwd, else return an
-/// absolute path.
-String getDisplayPath(String fullPath) {
-  final String cwd = globals.fs.currentDirectory.path + globals.fs.path.separator;
-  return fullPath.startsWith(cwd) ? fullPath.substring(cwd.length) : fullPath;
+/// Return a String - with units - for the size in MB of the given number of bytes.
+String getSizeAsMB(int bytesLength) {
+  return '${(bytesLength / (1024 * 1024)).toStringAsFixed(1)}MB';
 }
 
 /// A class to maintain a list of items, fire events when items are added or
@@ -215,40 +141,6 @@ class SettingsFile {
   }
 }
 
-/// A UUID generator. This will generate unique IDs in the format:
-///
-///     f47ac10b-58cc-4372-a567-0e02b2c3d479
-///
-/// The generated UUIDs are 128 bit numbers encoded in a specific string format.
-///
-/// For more information, see
-/// http://en.wikipedia.org/wiki/Universally_unique_identifier.
-class Uuid {
-  final Random _random = Random();
-
-  /// Generate a version 4 (random) UUID. This is a UUID scheme that only uses
-  /// random numbers as the source of the generated UUID.
-  String generateV4() {
-    // Generate xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx / 8-4-4-4-12.
-    final int special = 8 + _random.nextInt(4);
-
-    return
-      '${_bitsDigits(16, 4)}${_bitsDigits(16, 4)}-'
-          '${_bitsDigits(16, 4)}-'
-          '4${_bitsDigits(12, 3)}-'
-          '${_printDigits(special, 1)}${_bitsDigits(12, 3)}-'
-          '${_bitsDigits(16, 4)}${_bitsDigits(16, 4)}${_bitsDigits(16, 4)}';
-  }
-
-  String _bitsDigits(int bitCount, int digitCount) =>
-      _printDigits(_generateBits(bitCount), digitCount);
-
-  int _generateBits(int bitCount) => _random.nextInt(1 << bitCount);
-
-  String _printDigits(int value, int count) =>
-      value.toRadixString(16).padLeft(count, '0');
-}
-
 /// Given a data structure which is a Map of String to dynamic values, return
 /// the same structure (`Map<String, dynamic>`) with the correct runtime types.
 Map<String, dynamic> castStringKeyedMap(dynamic untyped) {
@@ -313,7 +205,7 @@ String wrapText(String text, { int columnWidth, int hangingIndent, int indent, b
     return '';
   }
   indent ??= 0;
-  columnWidth ??= outputPreferences.wrapColumn;
+  columnWidth ??= globals.outputPreferences.wrapColumn;
   columnWidth -= indent;
   assert(columnWidth >= 0);
 
@@ -366,13 +258,6 @@ String wrapText(String text, { int columnWidth, int hangingIndent, int indent, b
   return result.join('\n');
 }
 
-void writePidFile(String pidFile) {
-  if (pidFile != null) {
-    // Write our pid to the file.
-    globals.fs.file(pidFile).writeAsStringSync(io.pid.toString());
-  }
-}
-
 // Used to represent a run of ANSI control sequences next to a visible
 // character.
 class _AnsiRun {
@@ -403,7 +288,7 @@ List<String> _wrapTextAsLines(String text, { int start = 0, int columnWidth, @re
   assert(columnWidth != null);
   assert(columnWidth >= 0);
   assert(start >= 0);
-  shouldWrap ??= outputPreferences.wrapText;
+  shouldWrap ??= globals.outputPreferences.wrapText;
 
   /// Returns true if the code unit at [index] in [text] is a whitespace
   /// character.
@@ -431,7 +316,7 @@ List<String> _wrapTextAsLines(String text, { int start = 0, int columnWidth, @re
   // reconstitute the original string. This is useful for manipulating "visible"
   // characters in the presence of ANSI control codes.
   List<_AnsiRun> splitWithCodes(String input) {
-    final RegExp characterOrCode = RegExp('(\u001b\[[0-9;]*m|.)', multiLine: true);
+    final RegExp characterOrCode = RegExp('(\u001b\\[[0-9;]*m|.)', multiLine: true);
     List<_AnsiRun> result = <_AnsiRun>[];
     final StringBuffer current = StringBuffer();
     for (final Match match in characterOrCode.allMatches(input)) {

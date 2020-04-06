@@ -464,6 +464,7 @@ class _CupertinoDialogRenderElement extends RenderObjectElement {
       assert(_actionsElement == child);
       _actionsElement = null;
     }
+    super.forgetChild(child);
   }
 
   @override
@@ -1020,7 +1021,7 @@ class _PressableActionButtonState extends State<_PressableActionButton> {
 // _ActionButtonParentData. _ActionButtonParentDataWidget is responsible for
 // updating the pressed state of an _ActionButtonParentData based on the
 // incoming [isPressed] property.
-class _ActionButtonParentDataWidget extends ParentDataWidget<_CupertinoDialogActionsRenderWidget> {
+class _ActionButtonParentDataWidget extends ParentDataWidget<_ActionButtonParentData> {
   const _ActionButtonParentDataWidget({
     Key key,
     this.isPressed,
@@ -1042,6 +1043,9 @@ class _ActionButtonParentDataWidget extends ParentDataWidget<_CupertinoDialogAct
         targetParent.markNeedsPaint();
     }
   }
+
+  @override
+  Type get debugTypicalAncestorWidgetClass => _CupertinoDialogActionsRenderWidget;
 }
 
 // ParentData applied to individual action buttons that report whether or not
@@ -1536,6 +1540,7 @@ class _RenderCupertinoDialogActions extends RenderBox
 
   @override
   void performLayout() {
+    final BoxConstraints constraints = this.constraints;
     if (_isSingleButtonRow(dialogWidth)) {
       if (childCount == 1) {
         // We have 1 button. Our size is the width of the dialog and the height

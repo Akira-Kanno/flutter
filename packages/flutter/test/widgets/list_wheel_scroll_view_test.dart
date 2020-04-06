@@ -594,7 +594,7 @@ void main() {
         find.byKey(const Key('list_wheel_scroll_view')),
         matchesGoldenFile('list_wheel_scroll_view.center_child.magnified.png'),
       );
-    }, skip: isBrowser);
+    });
 
     testWidgets('Default middle transform', (WidgetTester tester) async {
       await tester.pumpWidget(
@@ -648,7 +648,7 @@ void main() {
         find.byKey(const Key('list_wheel_scroll_view')),
         matchesGoldenFile('list_wheel_scroll_view.curved_wheel.left.png'),
       );
-    }, skip: isBrowser);
+    });
 
     testWidgets('Scrolling, diameterRatio, perspective all changes matrix', (WidgetTester tester) async {
       final ScrollController controller = ScrollController(initialScrollOffset: 200.0);
@@ -1203,8 +1203,6 @@ void main() {
     });
 
     testWidgets('high fling velocities lands exactly on items', (WidgetTester tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-
       final FixedExtentScrollController controller = FixedExtentScrollController(initialItem: 40);
       final List<double> scrolledPositions = <double>[];
 
@@ -1252,9 +1250,7 @@ void main() {
       expect(controller.selectedItem, 49);
       // More importantly, lands tightly on 49.
       expect(scrolledPositions.last, moreOrLessEquals(49 * 100.0, epsilon: 0.3));
-
-      debugDefaultTargetPlatformOverride = null;
-    });
+    }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
   });
 
   testWidgets('ListWheelScrollView getOffsetToReveal', (WidgetTester tester) async {

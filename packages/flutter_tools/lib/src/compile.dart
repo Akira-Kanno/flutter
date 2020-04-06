@@ -196,8 +196,9 @@ class StdoutHandler {
 /// Converts filesystem paths to package URIs.
 class PackageUriMapper {
   PackageUriMapper(String scriptPath, String packagesPath, String fileSystemScheme, List<String> fileSystemRoots) {
-    final Map<String, Uri> packageMap = PackageMap(globals.fs.path.absolute(packagesPath)).map;
-    final String scriptUri = Uri.file(scriptPath, windows: globals.platform.isWindows).toString();
+    final Map<String, Uri> packageMap = PackageMap(globals.fs.path.absolute(packagesPath), fileSystem: globals.fs).map;
+    final bool isWindowsPath = globals.platform.isWindows && !scriptPath.startsWith('org-dartlang-app');
+    final String scriptUri = Uri.file(scriptPath, windows: isWindowsPath).toString();
     for (final String packageName in packageMap.keys) {
       final String prefix = packageMap[packageName].toString();
       // Only perform a multi-root mapping if there are multiple roots.
@@ -240,7 +241,8 @@ class PackageUriMapper {
   }
 }
 
-List<String> _buildModeOptions(BuildMode mode) {
+/// List the preconfigured build options for a given build mode.
+List<String> buildModeOptions(BuildMode mode) {
   switch (mode) {
     case BuildMode.debug:
       return <String>[
@@ -277,7 +279,6 @@ class KernelCompiler {
     @required BuildMode buildMode,
     bool linkPlatformKernelIn = false,
     bool aot = false,
-    bool causalAsyncStacks = true,
     @required bool trackWidgetCreation,
     List<String> extraFrontEndOptions,
     String packagesPath,
@@ -313,10 +314,10 @@ class KernelCompiler {
       '--sdk-root',
       sdkRoot,
       '--target=$targetModel',
-      '-Ddart.developer.causal_async_stacks=$causalAsyncStacks',
+      '-Ddart.developer.causal_async_stacks=${buildMode == BuildMode.debug}',
       for (final Object dartDefine in dartDefines)
         '-D$dartDefine',
-      ..._buildModeOptions(buildMode),
+      ...buildModeOptions(buildMode),
       if (trackWidgetCreation) '--track-widget-creation',
       if (!linkPlatformKernelIn) '--no-link-platform',
       if (aot) ...<String>[
@@ -357,14 +358,9 @@ class KernelCompiler {
     ];
 
     globals.printTrace(command.join(' '));
-    final Process server = await globals.processManager
-      .start(command)
-      .catchError((dynamic error, StackTrace stack) {
-        globals.printError('Failed to start frontend server $error, $stack');
-      });
+    final Process server = await globals.processManager.start(command);
 
     final StdoutHandler _stdoutHandler = StdoutHandler();
-
     server.stderr
       .transform<String>(utf8.decoder)
       .listen(globals.printError);
@@ -435,6 +431,31 @@ class _CompileExpressionRequest extends _CompilationRequest {
       compiler._compileExpression(this);
 }
 
+class _CompileExpressionToJsRequest extends _CompilationRequest {
+  _CompileExpressionToJsRequest(
+    Completer<CompilerOutput> completer,
+    this.libraryUri,
+    this.line,
+    this.column,
+    this.jsModules,
+    this.jsFrameValues,
+    this.moduleName,
+    this.expression,
+  ) : super(completer);
+
+  final String libraryUri;
+  final int line;
+  final int column;
+  final Map<String, String> jsModules;
+  final Map<String, String> jsFrameValues;
+  final String moduleName;
+  final String expression;
+
+  @override
+  Future<CompilerOutput> _run(DefaultResidentCompiler compiler) async =>
+      compiler._compileExpressionToJs(this);
+}
+
 class _RejectRequest extends _CompilationRequest {
   _RejectRequest(Completer<CompilerOutput> completer) : super(completer);
 
@@ -451,7 +472,6 @@ class _RejectRequest extends _CompilationRequest {
 abstract class ResidentCompiler {
   factory ResidentCompiler(String sdkRoot, {
     @required BuildMode buildMode,
-    bool causalAsyncStacks,
     bool trackWidgetCreation,
     String packagesPath,
     List<String> fileSystemRoots,
@@ -463,8 +483,13 @@ abstract class ResidentCompiler {
     List<String> experimentalFlags,
     String platformDill,
     List<String> dartDefines,
+    String librariesSpec,
   }) = DefaultResidentCompiler;
 
+  // TODO(jonahwilliams): find a better way to configure additional file system
+  // roots from the runner.
+  // See: https://github.com/flutter/flutter/issues/50494
+  void addFileSystemRoot(String root);
 
   /// If invoked for the first time, it compiles Dart script identified by
   /// [mainPath], [invalidatedFiles] list is ignored.
@@ -487,6 +512,36 @@ abstract class ResidentCompiler {
     String libraryUri,
     String klass,
     bool isStatic,
+  );
+
+  /// Compiles [expression] in [libraryUri] at [line]:[column] to JavaScript
+  /// in [moduleName].
+  ///
+  /// Values listed in [jsFrameValues] are substituted for their names in the
+  /// [expression].
+  ///
+  /// Ensures that all [jsModules] are loaded and accessible inside the
+  /// expression.
+  ///
+  /// Example values of parameters:
+  /// [moduleName] is of the form '/packages/hello_world_main.dart'
+  /// [jsFrameValues] is a map from js variable name to its primitive value
+  /// or another variable name, for example
+  /// { 'x': '1', 'y': 'y', 'o': 'null' }
+  /// [jsModules] is a map from variable name to the module name, where
+  /// variable name is the name originally used in JavaScript to contain the
+  /// module object, for example:
+  /// { 'dart':'dart_sdk', 'main': '/packages/hello_world_main.dart' }
+  /// Returns a [CompilerOutput] including the name of the file containing the
+  /// compilation result and a number of errors
+  Future<CompilerOutput> compileExpressionToJs(
+    String libraryUri,
+    int line,
+    int column,
+    Map<String, String> jsModules,
+    Map<String, String> jsFrameValues,
+    String moduleName,
+    String expression,
   );
 
   /// Should be invoked when results of compilation are accepted by the client.
@@ -512,7 +567,6 @@ class DefaultResidentCompiler implements ResidentCompiler {
   DefaultResidentCompiler(
     String sdkRoot, {
     @required this.buildMode,
-    this.causalAsyncStacks = true,
     this.trackWidgetCreation = true,
     this.packagesPath,
     this.fileSystemRoots,
@@ -524,6 +578,7 @@ class DefaultResidentCompiler implements ResidentCompiler {
     this.experimentalFlags,
     this.platformDill,
     List<String> dartDefines,
+    this.librariesSpec,
   }) : assert(sdkRoot != null),
        _stdoutHandler = StdoutHandler(consumer: compilerMessageConsumer),
        dartDefines = dartDefines ?? const <String>[],
@@ -531,7 +586,6 @@ class DefaultResidentCompiler implements ResidentCompiler {
        sdkRoot = sdkRoot.endsWith('/') ? sdkRoot : '$sdkRoot/';
 
   final BuildMode buildMode;
-  final bool causalAsyncStacks;
   final bool trackWidgetCreation;
   final String packagesPath;
   final TargetModel targetModel;
@@ -541,6 +595,12 @@ class DefaultResidentCompiler implements ResidentCompiler {
   final bool unsafePackageSerialization;
   final List<String> experimentalFlags;
   final List<String> dartDefines;
+  final String librariesSpec;
+
+  @override
+  void addFileSystemRoot(String root) {
+    fileSystemRoots.add(root);
+  }
 
   /// The path to the root of the Dart SDK used to compile.
   ///
@@ -609,8 +669,9 @@ class DefaultResidentCompiler implements ResidentCompiler {
     _server.stdin.writeln('recompile $mainUri$inputKey');
     globals.printTrace('<- recompile $mainUri$inputKey');
     for (final Uri fileUri in request.invalidatedFiles) {
-      _server.stdin.writeln(_mapFileUri(fileUri.toString(), packageUriMapper));
-      globals.printTrace('${_mapFileUri(fileUri.toString(), packageUriMapper)}');
+      final String message = _mapFileUri(fileUri.toString(), packageUriMapper);
+      _server.stdin.writeln(message);
+      globals.printTrace(message);
     }
     _server.stdin.writeln(inputKey);
     globals.printTrace('<- $inputKey');
@@ -650,12 +711,20 @@ class DefaultResidentCompiler implements ResidentCompiler {
       sdkRoot,
       '--incremental',
       '--target=$targetModel',
-      '-Ddart.developer.causal_async_stacks=$causalAsyncStacks',
+      // TODO(jonahwilliams): remove once this becomes the default behavior
+      // in the frontend_server.
+      // https://github.com/flutter/flutter/issues/52693
+      '--debugger-module-names',
+      '-Ddart.developer.causal_async_stacks=${buildMode == BuildMode.debug}',
       for (final Object dartDefine in dartDefines)
         '-D$dartDefine',
       if (outputPath != null) ...<String>[
         '--output-dill',
         outputPath,
+      ],
+      if (librariesSpec != null) ...<String>[
+        '--libraries-spec',
+        librariesSpec,
       ],
       if (packagesFilePath != null) ...<String>[
         '--packages',
@@ -664,7 +733,7 @@ class DefaultResidentCompiler implements ResidentCompiler {
         '--packages',
         packagesPath,
       ],
-      ..._buildModeOptions(buildMode),
+      ...buildModeOptions(buildMode),
       if (trackWidgetCreation) '--track-widget-creation',
       if (fileSystemRoots != null)
         for (final String root in fileSystemRoots) ...<String>[
@@ -760,6 +829,52 @@ class DefaultResidentCompiler implements ResidentCompiler {
     _server.stdin.writeln(request.libraryUri ?? '');
     _server.stdin.writeln(request.klass ?? '');
     _server.stdin.writeln(request.isStatic ?? false);
+
+    return _stdoutHandler.compilerOutput.future;
+  }
+
+  @override
+  Future<CompilerOutput> compileExpressionToJs(
+    String libraryUri,
+    int line,
+    int column,
+    Map<String, String> jsModules,
+    Map<String, String> jsFrameValues,
+    String moduleName,
+    String expression,
+  ) {
+    if (!_controller.hasListener) {
+      _controller.stream.listen(_handleCompilationRequest);
+    }
+
+    final Completer<CompilerOutput> completer = Completer<CompilerOutput>();
+    _controller.add(
+        _CompileExpressionToJsRequest(
+            completer, libraryUri, line, column, jsModules, jsFrameValues, moduleName, expression)
+    );
+    return completer.future;
+  }
+
+  Future<CompilerOutput> _compileExpressionToJs(_CompileExpressionToJsRequest request) async {
+    _stdoutHandler.reset(suppressCompilerMessages: true, expectSources: false);
+
+    // 'compile-expression-to-js' should be invoked after compiler has been started,
+    // program was compiled.
+    if (_server == null) {
+      return null;
+    }
+
+    final String inputKey = Uuid().generateV4();
+    _server.stdin.writeln('compile-expression-to-js $inputKey');
+    _server.stdin.writeln(request.libraryUri ?? '');
+    _server.stdin.writeln(request.line);
+    _server.stdin.writeln(request.column);
+    request.jsModules?.forEach((String k, String v) { _server.stdin.writeln('$k:$v'); });
+    _server.stdin.writeln(inputKey);
+    request.jsFrameValues?.forEach((String k, String v) { _server.stdin.writeln('$k:$v'); });
+    _server.stdin.writeln(inputKey);
+    _server.stdin.writeln(request.moduleName ?? '');
+    _server.stdin.writeln(request.expression ?? '');
 
     return _stdoutHandler.compilerOutput.future;
   }

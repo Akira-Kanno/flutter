@@ -4,6 +4,8 @@
 
 import 'dart:async';
 
+import 'package:meta/meta.dart';
+
 import '../base/common.dart';
 import '../build_info.dart';
 import '../cache.dart';
@@ -12,11 +14,13 @@ import '../globals.dart' as globals;
 import '../project.dart';
 import '../runner/flutter_command.dart' show FlutterCommandResult;
 import '../windows/build_windows.dart';
+import '../windows/visual_studio.dart';
 import 'build.dart';
 
 /// A command to build a windows desktop target through a build shell script.
 class BuildWindowsCommand extends BuildSubCommand {
   BuildWindowsCommand() {
+    addTreeShakeIconsFlag();
     addBuildModeFlags();
     usesTargetOption();
   }
@@ -35,6 +39,9 @@ class BuildWindowsCommand extends BuildSubCommand {
   @override
   String get description => 'build the desktop Windows target.';
 
+  @visibleForTesting
+  VisualStudio visualStudioOverride;
+
   @override
   Future<FlutterCommandResult> runCommand() async {
     Cache.releaseLockEarly();
@@ -46,7 +53,12 @@ class BuildWindowsCommand extends BuildSubCommand {
     if (!globals.platform.isWindows) {
       throwToolExit('"build windows" only supported on Windows hosts.');
     }
-    await buildWindows(flutterProject.windows, buildInfo, target: targetFile);
-    return null;
+    await buildWindows(
+      flutterProject.windows,
+      buildInfo,
+      target: targetFile,
+      visualStudioOverride: visualStudioOverride,
+    );
+    return FlutterCommandResult.success();
   }
 }

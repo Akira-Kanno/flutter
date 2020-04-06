@@ -15,6 +15,7 @@ import 'assertions.dart';
 import 'basic_types.dart';
 import 'constants.dart';
 import 'debug.dart';
+import 'object.dart';
 import 'platform.dart';
 import 'print.dart';
 
@@ -160,14 +161,20 @@ abstract class BindingBase {
               case 'android':
                 debugDefaultTargetPlatformOverride = TargetPlatform.android;
                 break;
+              case 'fuchsia':
+                debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+                break;
               case 'iOS':
                 debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+                break;
+              case 'linux':
+                debugDefaultTargetPlatformOverride = TargetPlatform.linux;
                 break;
               case 'macOS':
                 debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
                 break;
-              case 'fuchsia':
-                debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+              case 'windows':
+                debugDefaultTargetPlatformOverride = TargetPlatform.windows;
                 break;
               case 'default':
               default:
@@ -546,7 +553,7 @@ abstract class BindingBase {
   }
 
   @override
-  String toString() => '<$runtimeType>';
+  String toString() => '<${objectRuntimeType(this, 'BindingBase')}>';
 }
 
 /// Terminate the Flutter application.

@@ -8,7 +8,6 @@ import 'package:quiver/core.dart' show hash2;
 
 import '../convert.dart' show json;
 import '../globals.dart' as globals;
-import '../version.dart';
 import 'file_system.dart';
 import 'utils.dart';
 
@@ -67,7 +66,7 @@ class Fingerprinter {
       final Fingerprint oldFingerprint = Fingerprint.fromJson(fingerprintFile.readAsStringSync());
       final Fingerprint newFingerprint = buildFingerprint();
       return oldFingerprint == newFingerprint;
-    } catch (e) {
+    } on Exception catch (e) {
       // Log exception and continue, fingerprinting is only a performance improvement.
       globals.printTrace('Fingerprint check error: $e');
     }
@@ -78,7 +77,7 @@ class Fingerprinter {
     try {
       final Fingerprint fingerprint = buildFingerprint();
       globals.fs.file(fingerprintPath).writeAsStringSync(fingerprint.toJson());
-    } catch (e) {
+    } on Exception catch (e) {
       // Log exception and continue, fingerprinting is only a performance improvement.
       globals.printTrace('Fingerprint write error: $e');
     }
@@ -104,7 +103,7 @@ class Fingerprint {
     final Iterable<File> files = inputPaths.map<File>(globals.fs.file);
     final Iterable<File> missingInputs = files.where((File file) => !file.existsSync());
     if (missingInputs.isNotEmpty) {
-      throw ArgumentError('Missing input files:\n' + missingInputs.join('\n'));
+      throw Exception('Missing input files:\n' + missingInputs.join('\n'));
     }
 
     _checksums = <String, String>{};
@@ -117,14 +116,14 @@ class Fingerprint {
 
   /// Creates a Fingerprint from serialized JSON.
   ///
-  /// Throws [ArgumentError], if there is a version mismatch between the
+  /// Throws [Exception], if there is a version mismatch between the
   /// serializing framework and this framework.
   Fingerprint.fromJson(String jsonData) {
     final Map<String, dynamic> content = castStringKeyedMap(json.decode(jsonData));
 
     final String version = content['version'] as String;
-    if (version != FlutterVersion.instance.frameworkRevision) {
-      throw ArgumentError('Incompatible fingerprint version: $version');
+    if (version != globals.flutterVersion.frameworkRevision) {
+      throw Exception('Incompatible fingerprint version: $version');
     }
     _checksums = castStringKeyedMap(content['files'])?.cast<String,String>() ?? <String, String>{};
     _properties = castStringKeyedMap(content['properties'])?.cast<String,String>() ?? <String, String>{};
@@ -134,7 +133,7 @@ class Fingerprint {
   Map<String, String> _properties;
 
   String toJson() => json.encode(<String, dynamic>{
-    'version': FlutterVersion.instance.frameworkRevision,
+    'version': globals.flutterVersion.frameworkRevision,
     'properties': _properties,
     'files': _checksums,
   });
@@ -183,8 +182,11 @@ Set<String> readDepfile(String depfilePath) {
   // outfile1 outfile2 : file1.dart file2.dart file3.dart
   final String contents = globals.fs.file(depfilePath).readAsStringSync();
 
-  final String dependencies = contents.split(': ')[1];
-  return dependencies
+  final List<String> dependencies = contents.split(': ');
+  if (dependencies.length < 2) {
+    throw Exception('malformed depfile');
+  }
+  return dependencies[1]
       .replaceAllMapped(_separatorExpr, (Match match) => '${match.group(1)}\n')
       .split('\n')
       .map<String>((String path) => path.replaceAllMapped(_escapeExpr, (Match match) => match.group(1)).trim())

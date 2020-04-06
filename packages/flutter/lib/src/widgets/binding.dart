@@ -254,6 +254,12 @@ mixin WidgetsBinding on BindingBase, ServicesBinding, SchedulerBinding, GestureB
   void initInstances() {
     super.initInstances();
     _instance = this;
+
+    assert(() {
+      _debugAddStackFilters();
+      return true;
+    }());
+
     // Initialization of [_buildOwner] has to be done after
     // [super.initInstances] is called, as it requires [ServicesBinding] to
     // properly setup the [defaultBinaryMessenger] instance.
@@ -263,6 +269,87 @@ mixin WidgetsBinding on BindingBase, ServicesBinding, SchedulerBinding, GestureB
     window.onAccessibilityFeaturesChanged = handleAccessibilityFeaturesChanged;
     SystemChannels.navigation.setMethodCallHandler(_handleNavigationInvocation);
     FlutterErrorDetails.propertiesTransformers.add(transformDebugCreator);
+  }
+
+  void _debugAddStackFilters() {
+    const PartialStackFrame elementInflateWidget = PartialStackFrame(package: 'package:flutter/src/widgets/framework.dart', className: 'Element', method: 'inflateWidget');
+    const PartialStackFrame elementUpdateChild = PartialStackFrame(package: 'package:flutter/src/widgets/framework.dart', className: 'Element', method: 'updateChild');
+    const PartialStackFrame elementRebuild = PartialStackFrame(package: 'package:flutter/src/widgets/framework.dart', className: 'Element', method: 'rebuild');
+    const PartialStackFrame componentElementPerformRebuild = PartialStackFrame(package: 'package:flutter/src/widgets/framework.dart', className: 'ComponentElement', method: 'performRebuild');
+    const PartialStackFrame componentElementFirstBuild = PartialStackFrame(package: 'package:flutter/src/widgets/framework.dart', className: 'ComponentElement', method: '_firstBuild');
+    const PartialStackFrame componentElementMount = PartialStackFrame(package: 'package:flutter/src/widgets/framework.dart', className: 'ComponentElement', method: 'mount');
+    const PartialStackFrame statefulElementFirstBuild = PartialStackFrame(package: 'package:flutter/src/widgets/framework.dart', className: 'StatefulElement', method: '_firstBuild');
+    const PartialStackFrame singleChildMount = PartialStackFrame(package: 'package:flutter/src/widgets/framework.dart', className: 'SingleChildRenderObjectElement', method: 'mount');
+    const PartialStackFrame statefulElementRebuild = PartialStackFrame(package: 'package:flutter/src/widgets/framework.dart', className: 'StatefulElement', method: 'performRebuild');
+
+    const String replacementString = '...     Normal element mounting';
+
+    // ComponentElement variations
+    FlutterError.addDefaultStackFilter(const RepetitiveStackFrameFilter(
+      frames: <PartialStackFrame>[
+        elementInflateWidget,
+        elementUpdateChild,
+        componentElementPerformRebuild,
+        elementRebuild,
+        componentElementFirstBuild,
+        componentElementMount,
+      ],
+      replacement: replacementString,
+    ));
+    FlutterError.addDefaultStackFilter(const RepetitiveStackFrameFilter(
+      frames: <PartialStackFrame>[
+        elementUpdateChild,
+        componentElementPerformRebuild,
+        elementRebuild,
+        componentElementFirstBuild,
+        componentElementMount,
+      ],
+      replacement: replacementString,
+    ));
+
+    // StatefulElement variations
+    FlutterError.addDefaultStackFilter(const RepetitiveStackFrameFilter(
+      frames: <PartialStackFrame>[
+        elementInflateWidget,
+        elementUpdateChild,
+        componentElementPerformRebuild,
+        statefulElementRebuild,
+        elementRebuild,
+        componentElementFirstBuild,
+        statefulElementFirstBuild,
+        componentElementMount,
+      ],
+      replacement: replacementString,
+    ));
+    FlutterError.addDefaultStackFilter(const RepetitiveStackFrameFilter(
+      frames: <PartialStackFrame>[
+        elementUpdateChild,
+        componentElementPerformRebuild,
+        statefulElementRebuild,
+        elementRebuild,
+        componentElementFirstBuild,
+        statefulElementFirstBuild,
+        componentElementMount,
+      ],
+      replacement: replacementString,
+    ));
+
+    // SingleChildRenderObjectElement variations
+    FlutterError.addDefaultStackFilter(const RepetitiveStackFrameFilter(
+      frames: <PartialStackFrame>[
+        elementInflateWidget,
+        elementUpdateChild,
+        singleChildMount,
+      ],
+      replacement: replacementString,
+    ));
+    FlutterError.addDefaultStackFilter(const RepetitiveStackFrameFilter(
+      frames: <PartialStackFrame>[
+        elementUpdateChild,
+        singleChildMount,
+      ],
+      replacement: replacementString,
+    ));
   }
 
   /// The current [WidgetsBinding], if one has been created.
@@ -568,30 +655,11 @@ mixin WidgetsBinding on BindingBase, ServicesBinding, SchedulerBinding, GestureB
       observer.didChangeAppLifecycleState(state);
   }
 
-  /// Called when the operating system notifies the application of a memory
-  /// pressure situation.
-  ///
-  /// Notifies all the observers using
-  /// [WidgetsBindingObserver.didHaveMemoryPressure].
-  ///
-  /// This method exposes the `memoryPressure` notification from
-  /// [SystemChannels.system].
+  @override
   void handleMemoryPressure() {
+    super.handleMemoryPressure();
     for (final WidgetsBindingObserver observer in _observers)
       observer.didHaveMemoryPressure();
-  }
-
-  @override
-  Future<void> handleSystemMessage(Object systemMessage) async {
-    await super.handleSystemMessage(systemMessage);
-    final Map<String, dynamic> message = systemMessage as Map<String, dynamic>;
-    final String type = message['type'] as String;
-    switch (type) {
-      case 'memoryPressure':
-        handleMemoryPressure();
-        break;
-    }
-    return;
   }
 
   bool _needToReportFirstFrame = true;
@@ -702,7 +770,7 @@ mixin WidgetsBinding on BindingBase, ServicesBinding, SchedulerBinding, GestureB
   /// Pump the build and rendering pipeline to generate a frame.
   ///
   /// This method is called by [handleDrawFrame], which itself is called
-  /// automatically by the engine when when it is time to lay out and paint a
+  /// automatically by the engine when it is time to lay out and paint a
   /// frame.
   ///
   /// Each frame consists of the following phases:
@@ -820,6 +888,11 @@ mixin WidgetsBinding on BindingBase, ServicesBinding, SchedulerBinding, GestureB
   Element get renderViewElement => _renderViewElement;
   Element _renderViewElement;
 
+  bool _readyToProduceFrames = false;
+
+  @override
+  bool get framesEnabled => super.framesEnabled && _readyToProduceFrames;
+
   /// Schedules a [Timer] for attaching the root widget.
   ///
   /// This is called by [runApp] to configure the widget tree. Consider using
@@ -841,6 +914,7 @@ mixin WidgetsBinding on BindingBase, ServicesBinding, SchedulerBinding, GestureB
   ///  * [RenderObjectToWidgetAdapter.attachToRenderTree], which inflates a
   ///    widget and attaches it to the render tree.
   void attachRootWidget(Widget rootWidget) {
+    _readyToProduceFrames = true;
     _renderViewElement = RenderObjectToWidgetAdapter<RenderBox>(
       container: renderView,
       debugShortDescription: '[root]',
@@ -1016,6 +1090,7 @@ class RenderObjectToWidgetElement<T extends RenderObject> extends RootRenderObje
   void forgetChild(Element child) {
     assert(child == _child);
     _child = null;
+    super.forgetChild(child);
   }
 
   @override

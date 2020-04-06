@@ -61,8 +61,17 @@ void main() {
       expect(devices, hasLength(1));
 
       final Device device = devices.single;
-      expect(device, isInstanceOf<FlutterTesterDevice>());
+      expect(device, isA<FlutterTesterDevice>());
       expect(device.id, 'flutter-tester');
+    });
+
+    testUsingContext('discoverDevices', () async {
+      FlutterTesterDevices.showFlutterTesterDevice = true;
+      final FlutterTesterDevices discoverer = FlutterTesterDevices();
+
+      // Timeout ignored.
+      final List<Device> devices = await discoverer.discoverDevices(timeout: const Duration(seconds: 10));
+      expect(devices, hasLength(1));
     });
   });
 
@@ -148,7 +157,7 @@ void main() {
       testUsingContext('not debug', () async {
         final LaunchResult result = await device.startApp(null,
             mainPath: mainPath,
-            debuggingOptions: DebuggingOptions.disabled(const BuildInfo(BuildMode.release, null)));
+            debuggingOptions: DebuggingOptions.disabled(const BuildInfo(BuildMode.release, null, treeShakeIcons: false)));
 
         expect(result.started, isFalse);
       }, overrides: startOverrides);
@@ -166,7 +175,7 @@ Hello!
 
         final LaunchResult result = await device.startApp(null,
             mainPath: mainPath,
-            debuggingOptions: DebuggingOptions.enabled(const BuildInfo(BuildMode.debug, null)));
+            debuggingOptions: DebuggingOptions.enabled(const BuildInfo(BuildMode.debug, null, treeShakeIcons: false)));
         expect(result.started, isTrue);
         expect(result.observatoryUri, observatoryUri);
         expect(logLines.last, 'Hello!');

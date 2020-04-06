@@ -16,6 +16,7 @@ import '../build_system/targets/linux.dart';
 import '../build_system/targets/macos.dart';
 import '../build_system/targets/web.dart';
 import '../build_system/targets/windows.dart';
+import '../cache.dart';
 import '../globals.dart' as globals;
 import '../project.dart';
 import '../reporting/reporting.dart';
@@ -35,14 +36,12 @@ const List<Target> _kDefaultTargets = <Target>[
   ProfileMacOSBundleFlutterAssets(),
   ReleaseMacOSBundleFlutterAssets(),
   DebugBundleLinuxAssets(),
-  WebReleaseBundle(),
+  WebServiceWorker(),
   DebugAndroidApplication(),
   FastStartAndroidApplication(),
   ProfileAndroidApplication(),
   ReleaseAndroidApplication(),
-  // These are one-off rules for bundle and aot compat
-  ReleaseCopyFlutterAotBundle(),
-  ProfileCopyFlutterAotBundle(),
+  // This is a one-off rule for bundle and aot compat.
   CopyFlutterBundle(),
   // Android ABI specific AOT rules.
   androidArmProfileBundle,
@@ -51,6 +50,9 @@ const List<Target> _kDefaultTargets = <Target>[
   androidArmReleaseBundle,
   androidArm64ReleaseBundle,
   androidx64ReleaseBundle,
+  DebugIosApplicationBundle(),
+  ProfileIosApplicationBundle(),
+  ReleaseIosApplicationBundle(),
 ];
 
 /// Assemble provides a low level API to interact with the flutter tool build
@@ -102,7 +104,7 @@ class AssembleCommand extends FlutterCommand {
         CustomDimensions.commandBuildBundleTargetPlatform: localEnvironment.defines['TargetPlatform'],
         CustomDimensions.commandBuildBundleIsModule: '${futterProject.isModule}',
       };
-    } catch (err) {
+    } on Exception {
       // We've failed to send usage.
     }
     return const <CustomDimensions, String>{};
@@ -147,6 +149,12 @@ class AssembleCommand extends FlutterCommand {
           .childDirectory('flutter_build'),
       projectDir: flutterProject.directory,
       defines: _parseDefines(stringsArg('define')),
+      cacheDir: globals.cache.getRoot(),
+      flutterRootDir: globals.fs.directory(Cache.flutterRoot),
+      artifacts: globals.artifacts,
+      fileSystem: globals.fs,
+      logger: globals.logger,
+      processManager: globals.processManager,
     );
     return result;
   }
@@ -173,7 +181,7 @@ class AssembleCommand extends FlutterCommand {
   Future<FlutterCommandResult> runCommand() async {
     final List<Target> targets = this.targets;
     final Target target = targets.length == 1 ? targets.single : _CompositeTarget(targets);
-    final BuildResult result = await buildSystem.build(target, environment, buildSystemConfig: BuildSystemConfig(
+    final BuildResult result = await globals.buildSystem.build(target, environment, buildSystemConfig: BuildSystemConfig(
       resourcePoolSize: argResults.wasParsed('resource-pool-size')
         ? int.tryParse(stringArg('resource-pool-size'))
         : null,
@@ -198,9 +206,14 @@ class AssembleCommand extends FlutterCommand {
     if (argResults.wasParsed('depfile')) {
       final File depfileFile = globals.fs.file(stringArg('depfile'));
       final Depfile depfile = Depfile(result.inputFiles, result.outputFiles);
-      depfile.writeToFile(globals.fs.file(depfileFile));
+      final DepfileService depfileService = DepfileService(
+        fileSystem: globals.fs,
+        logger: globals.logger,
+        platform: globals.platform,
+      );
+      depfileService.writeToFile(depfile, globals.fs.file(depfileFile));
     }
-    return null;
+    return FlutterCommandResult.success();
   }
 }
 

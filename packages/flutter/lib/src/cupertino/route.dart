@@ -300,21 +300,24 @@ class CupertinoPageRoute<T> extends PageRoute<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
+    // Check if the route has an animation that's currently participating
+    // in a back swipe gesture.
+    //
+    // In the middle of a back gesture drag, let the transition be linear to
+    // match finger motions.
+    final bool linearTransition = isPopGestureInProgress(route);
     if (route.fullscreenDialog) {
       return CupertinoFullscreenDialogTransition(
-        animation: animation,
+        primaryRouteAnimation: animation,
+        secondaryRouteAnimation: secondaryAnimation,
         child: child,
+        linearTransition: linearTransition,
       );
     } else {
       return CupertinoPageTransition(
         primaryRouteAnimation: animation,
         secondaryRouteAnimation: secondaryAnimation,
-        // Check if the route has an animation that's currently participating
-        // in a back swipe gesture.
-        //
-        // In the middle of a back gesture drag, let the transition be linear to
-        // match finger motions.
-        linearTransition: isPopGestureInProgress(route),
+        linearTransition: linearTransition,
         child: _CupertinoBackGestureDetector<T>(
           enabledCallback: () => _isPopGestureEnabled<T>(route),
           onStartPopGesture: () => _startPopGesture<T>(route),
@@ -344,7 +347,7 @@ class CupertinoPageTransition extends StatelessWidget {
   ///    when this screen is being pushed.
   ///  * `secondaryRouteAnimation` is a linear route animation from 0.0 to 1.0
   ///    when another screen is being pushed on top of this one.
-  ///  * `linearTransition` is whether to perform primary transition linearly.
+  ///  * `linearTransition` is whether to perform the transitions linearly.
   ///    Used to precisely track back gesture drags.
   CupertinoPageTransition({
     Key key,
@@ -422,29 +425,56 @@ class CupertinoPageTransition extends StatelessWidget {
 /// screen from the bottom.
 class CupertinoFullscreenDialogTransition extends StatelessWidget {
   /// Creates an iOS-style transition used for summoning fullscreen dialogs.
+  ///
+  ///  * `primaryRouteAnimation` is a linear route animation from 0.0 to 1.0
+  ///    when this screen is being pushed.
+  ///  * `secondaryRouteAnimation` is a linear route animation from 0.0 to 1.0
+  ///    when another screen is being pushed on top of this one.
+  ///  * `linearTransition` is whether to perform the secondary transition linearly.
+  ///    Used to precisely track back gesture drags.
   CupertinoFullscreenDialogTransition({
     Key key,
-    @required Animation<double> animation,
+    @required Animation<double> primaryRouteAnimation,
+    @required Animation<double> secondaryRouteAnimation,
     @required this.child,
+    @required bool linearTransition,
   }) : _positionAnimation = CurvedAnimation(
-         parent: animation,
+         parent: primaryRouteAnimation,
          curve: Curves.linearToEaseOut,
          // The curve must be flipped so that the reverse animation doesn't play
          // an ease-in curve, which iOS does not use.
          reverseCurve: Curves.linearToEaseOut.flipped,
        ).drive(_kBottomUpTween),
+       _secondaryPositionAnimation =
+           (linearTransition
+             ? secondaryRouteAnimation
+             : CurvedAnimation(
+                 parent: secondaryRouteAnimation,
+                 curve: Curves.linearToEaseOut,
+                 reverseCurve: Curves.easeInToLinear,
+               )
+           ).drive(_kMiddleLeftTween),
        super(key: key);
 
   final Animation<Offset> _positionAnimation;
+  // When this page is becoming covered by another page.
+  final Animation<Offset> _secondaryPositionAnimation;
 
   /// The widget below this widget in the tree.
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    assert(debugCheckHasDirectionality(context));
+    final TextDirection textDirection = Directionality.of(context);
     return SlideTransition(
-      position: _positionAnimation,
-      child: child,
+      position: _secondaryPositionAnimation,
+      textDirection: textDirection,
+      transformHitTests: false,
+      child: SlideTransition(
+        position: _positionAnimation,
+        child: child,
+      ),
     );
   }
 }
@@ -792,14 +822,18 @@ class _CupertinoModalPopupRoute<T> extends PopupRoute<T> {
     this.barrierColor,
     this.barrierLabel,
     this.builder,
+    bool semanticsDismissible,
     ImageFilter filter,
     RouteSettings settings,
   }) : super(
          filter: filter,
          settings: settings,
-       );
+       ) {
+    _semanticsDismissible = semanticsDismissible;
+  }
 
   final WidgetBuilder builder;
+  bool _semanticsDismissible;
 
   @override
   final String barrierLabel;
@@ -811,7 +845,7 @@ class _CupertinoModalPopupRoute<T> extends PopupRoute<T> {
   bool get barrierDismissible => true;
 
   @override
-  bool get semanticsDismissible => false;
+  bool get semanticsDismissible => _semanticsDismissible ?? false;
 
   @override
   Duration get transitionDuration => _kModalPopupTransitionDuration;
@@ -871,6 +905,9 @@ class _CupertinoModalPopupRoute<T> extends PopupRoute<T> {
 /// popup to the [Navigator] furthest from or nearest to the given `context`. It
 /// is `false` by default.
 ///
+/// The `semanticsDismissble` argument is used to determine whether the
+/// semantics of the modal barrier are included in the semantics tree.
+///
 /// The `builder` argument typically builds a [CupertinoActionSheet] widget.
 /// Content below the widget is dimmed with a [ModalBarrier]. The widget built
 /// by the `builder` does not share a context with the location that
@@ -891,6 +928,7 @@ Future<T> showCupertinoModalPopup<T>({
   @required WidgetBuilder builder,
   ImageFilter filter,
   bool useRootNavigator = true,
+  bool semanticsDismissible,
 }) {
   assert(useRootNavigator != null);
   return Navigator.of(context, rootNavigator: useRootNavigator).push(
@@ -899,6 +937,7 @@ Future<T> showCupertinoModalPopup<T>({
       barrierLabel: 'Dismiss',
       builder: builder,
       filter: filter,
+      semanticsDismissible: semanticsDismissible,
     ),
   );
 }
@@ -967,6 +1006,7 @@ Future<T> showCupertinoDialog<T>({
   @required BuildContext context,
   @required WidgetBuilder builder,
   bool useRootNavigator = true,
+  RouteSettings routeSettings,
 }) {
   assert(builder != null);
   assert(useRootNavigator != null);
@@ -981,5 +1021,6 @@ Future<T> showCupertinoDialog<T>({
     },
     transitionBuilder: _buildCupertinoDialogTransitions,
     useRootNavigator: useRootNavigator,
+    routeSettings: routeSettings,
   );
 }

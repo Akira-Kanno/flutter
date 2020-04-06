@@ -302,7 +302,7 @@ class Slider extends StatefulWidget {
   /// as part of the value indicator shape.
   ///
   /// The label is rendered using the active [ThemeData]'s
-  /// [ThemeData.textTheme.body2] text style, with the
+  /// [ThemeData.textTheme.bodyText1] text style, with the
   /// theme data's [ThemeData.colorScheme.onPrimaryColor]. The label's text style
   /// can be overridden with [SliderThemeData.valueIndicatorTextStyle].
   ///
@@ -502,6 +502,8 @@ class _SliderState extends State<Slider> with TickerProviderStateMixin {
         switch (theme.platform) {
           case TargetPlatform.android:
           case TargetPlatform.fuchsia:
+          case TargetPlatform.linux:
+          case TargetPlatform.windows:
             return _buildMaterialSlider(context);
           case TargetPlatform.iOS:
           case TargetPlatform.macOS:
@@ -543,7 +545,7 @@ class _SliderState extends State<Slider> with TickerProviderStateMixin {
       overlayShape: sliderTheme.overlayShape ?? _defaultOverlayShape,
       valueIndicatorShape: sliderTheme.valueIndicatorShape ?? _defaultValueIndicatorShape,
       showValueIndicator: sliderTheme.showValueIndicator ?? _defaultShowValueIndicator,
-      valueIndicatorTextStyle: sliderTheme.valueIndicatorTextStyle ?? theme.textTheme.body2.copyWith(
+      valueIndicatorTextStyle: sliderTheme.valueIndicatorTextStyle ?? theme.textTheme.bodyText1.copyWith(
         color: theme.colorScheme.onPrimary,
       ),
     );
@@ -892,13 +894,16 @@ class _RenderSlider extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     switch (_platform) {
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
-      // Matches iOS implementation of material slider.
+        // Matches iOS implementation of material slider.
         return 0.1;
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
-      // Matches Android implementation of material slider.
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+        // Matches Android implementation of material slider.
         return 0.05;
     }
+    assert(false, 'Unhandled TargetPlatform $_platform');
     return 0.0;
   }
 

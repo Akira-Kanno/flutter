@@ -97,7 +97,6 @@ class _TaskRunner {
       for (final RunningProcessInfo info in afterRunningDartInstances) {
         if (!beforeRunningDartInstances.contains(info)) {
           print('$info was leaked by this test.');
-          // TODO(dnfield): remove this special casing after https://github.com/flutter/flutter/issues/29141 is resolved.
           if (result is TaskResultCheckProcesses) {
             result = TaskResult.failure('This test leaked dart processes');
           }
@@ -181,10 +180,10 @@ class TaskResult {
     if (benchmarkScoreKeys != null) {
       for (final String key in benchmarkScoreKeys) {
         if (!data.containsKey(key)) {
-          throw 'Invalid Golem score key "$key". It does not exist in task '
+          throw 'Invalid benchmark score key "$key". It does not exist in task '
               'result data ${prettyJson.convert(data)}';
         } else if (data[key] is! num) {
-          throw 'Invalid Golem score for key "$key". It is expected to be a num '
+          throw 'Invalid benchmark score for key "$key". It is expected to be a num '
               'but was ${data[key].runtimeType}: ${prettyJson.convert(data[key])}';
         }
       }
@@ -212,17 +211,9 @@ class TaskResult {
   /// Task-specific JSON data
   final Map<String, dynamic> data;
 
-  /// Keys in [data] that store scores that will be submitted to Golem.
+  /// Keys in [data] that store scores that will be submitted to Cocoon.
   ///
-  /// Each key is also part of a benchmark's name tracked by Golem.
-  /// A benchmark name is computed by combining [Task.name] with a key
-  /// separated by a dot. For example, if a task's name is
-  /// `"complex_layout__start_up"` and score key is
-  /// `"engineEnterTimestampMicros"`, the score will be submitted to Golem under
-  /// `"complex_layout__start_up.engineEnterTimestampMicros"`.
-  ///
-  /// This convention reduces the amount of configuration that needs to be done
-  /// to submit benchmark scores to Golem.
+  /// Each key is also part of a benchmark's name tracked by Cocoon.
   final List<String> benchmarkScoreKeys;
 
   /// Whether the task failed.
@@ -259,6 +250,9 @@ class TaskResult {
 
     return json;
   }
+
+  @override
+  String toString() => message;
 }
 
 class TaskResultCheckProcesses extends TaskResult {

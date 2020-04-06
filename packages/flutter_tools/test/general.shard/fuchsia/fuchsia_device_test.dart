@@ -12,7 +12,6 @@ import 'package:flutter_tools/src/base/common.dart';
 import 'package:flutter_tools/src/base/context.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
-import 'package:flutter_tools/src/base/process.dart';
 import 'package:flutter_tools/src/base/os.dart';
 import 'package:flutter_tools/src/base/time.dart';
 import 'package:flutter_tools/src/build_info.dart';
@@ -30,6 +29,7 @@ import 'package:flutter_tools/src/project.dart';
 import 'package:flutter_tools/src/vmservice.dart';
 import 'package:meta/meta.dart';
 import 'package:mockito/mockito.dart';
+import 'package:platform/platform.dart';
 import 'package:process/process.dart';
 
 import '../../src/common.dart';
@@ -39,11 +39,11 @@ void main() {
   group('fuchsia device', () {
     MemoryFileSystem memoryFileSystem;
     MockFile sshConfig;
-    MockProcessUtils mockProcessUtils;
+
     setUp(() {
       memoryFileSystem = MemoryFileSystem();
       sshConfig = MockFile();
-      mockProcessUtils = MockProcessUtils();
+      when(sshConfig.existsSync()).thenReturn(true);
       when(sshConfig.absolute).thenReturn(sshConfig);
     });
 
@@ -55,20 +55,24 @@ void main() {
       expect(device.name, name);
     });
 
-    test('parse dev_finder output', () {
-      const String example = '192.168.42.56 paper-pulp-bush-angel';
-      final List<FuchsiaDevice> names = parseListDevices(example);
+    testUsingContext('parse device-finder output', () async {
+      const String example = '2001:0db8:85a3:0000:0000:8a2e:0370:7334 paper-pulp-bush-angel';
+      final List<FuchsiaDevice> names = await parseListDevices(example);
 
       expect(names.length, 1);
       expect(names.first.name, 'paper-pulp-bush-angel');
-      expect(names.first.id, '192.168.42.56');
+      expect(names.first.id, '192.168.42.10');
+    }, overrides: <Type, Generator>{
+      FuchsiaSdk: () => MockFuchsiaSdk(),
     });
 
-    test('parse junk dev_finder output', () {
+    testUsingContext('parse junk device-finder output', () async {
       const String example = 'junk';
-      final List<FuchsiaDevice> names = parseListDevices(example);
+      final List<FuchsiaDevice> names = await parseListDevices(example);
 
       expect(names.length, 0);
+    }, overrides: <Type, Generator>{
+      FuchsiaSdk: () => MockFuchsiaSdk(),
     });
 
     testUsingContext('disposing device disposes the portForwarder', () async {
@@ -93,6 +97,11 @@ void main() {
       ProcessManager: () => FakeProcessManager.any(),
     });
 
+    test('is ephemeral', () {
+      final FuchsiaDevice device = FuchsiaDevice('123');
+      expect(device.ephemeral, true);
+    });
+
     testUsingContext('supported for project', () async {
       final FuchsiaDevice device = FuchsiaDevice('123');
       globals.fs.directory('fuchsia').createSync(recursive: true);
@@ -112,28 +121,37 @@ void main() {
       ProcessManager: () => FakeProcessManager.any(),
     });
 
+    testUsingContext('targetPlatform does not throw when sshConfig is missing', () async {
+      final FuchsiaDevice device = FuchsiaDevice('123');
+      expect(await device.targetPlatform, TargetPlatform.fuchsia_arm64);
+    }, overrides: <Type, Generator>{
+      FuchsiaArtifacts: () => FuchsiaArtifacts(sshConfig: null),
+      FuchsiaSdk: () => MockFuchsiaSdk(),
+      ProcessManager: () => MockProcessManager(),
+    });
+
     testUsingContext('targetPlatform arm64 works', () async {
-      when(mockProcessUtils.run(any)).thenAnswer((Invocation _) {
-        return Future<RunResult>.value(RunResult(ProcessResult(1, 0, 'aarch64', ''), <String>['']));
+      when(globals.processManager.run(any)).thenAnswer((Invocation _) async {
+        return ProcessResult(1, 0, 'aarch64', '');
       });
       final FuchsiaDevice device = FuchsiaDevice('123');
       expect(await device.targetPlatform, TargetPlatform.fuchsia_arm64);
     }, overrides: <Type, Generator>{
       FuchsiaArtifacts: () => FuchsiaArtifacts(sshConfig: sshConfig),
       FuchsiaSdk: () => MockFuchsiaSdk(),
-      ProcessUtils: () => mockProcessUtils,
+      ProcessManager: () => MockProcessManager(),
     });
 
     testUsingContext('targetPlatform x64 works', () async {
-      when(mockProcessUtils.run(any)).thenAnswer((Invocation _) {
-        return Future<RunResult>.value(RunResult(ProcessResult(1, 0, 'x86_64', ''), <String>['']));
+      when(globals.processManager.run(any)).thenAnswer((Invocation _) async {
+        return ProcessResult(1, 0, 'x86_64', '');
       });
       final FuchsiaDevice device = FuchsiaDevice('123');
       expect(await device.targetPlatform, TargetPlatform.fuchsia_x64);
     }, overrides: <Type, Generator>{
       FuchsiaArtifacts: () => FuchsiaArtifacts(sshConfig: sshConfig),
       FuchsiaSdk: () => MockFuchsiaSdk(),
-      ProcessUtils: () => mockProcessUtils,
+      ProcessManager: () => MockProcessManager(),
     });
   });
 
@@ -321,6 +339,231 @@ void main() {
     });
   });
 
+  group('screenshot', () {
+    MockProcessManager mockProcessManager;
+
+    setUp(() {
+      mockProcessManager = MockProcessManager();
+    });
+
+    test('is supported on posix platforms', () {
+      final FuchsiaDevice device = FuchsiaDevice('id', name: 'tester');
+      expect(device.supportsScreenshot, true);
+    }, testOn: 'posix');
+
+    testUsingContext('is not supported on Windows', () {
+      final FuchsiaDevice device = FuchsiaDevice('id', name: 'tester');
+      expect(device.supportsScreenshot, false);
+    }, overrides: <Type, Generator>{
+      Platform: () => FakePlatform(
+        operatingSystem: 'windows',
+      ),
+    });
+
+    test("takeScreenshot throws if file isn't .ppm", () async {
+      final FuchsiaDevice device = FuchsiaDevice('id', name: 'tester');
+      await expectLater(
+        () => device.takeScreenshot(globals.fs.file('file.invalid')),
+        throwsA(equals('file.invalid must be a .ppm file')),
+      );
+    }, testOn: 'posix');
+
+    testUsingContext('takeScreenshot throws if screencap failed', () async {
+      final FuchsiaDevice device = FuchsiaDevice('0.0.0.0', name: 'tester');
+
+      when(mockProcessManager.run(
+        const <String>[
+          'ssh',
+          '-F',
+          '/fuchsia/out/default/.ssh',
+          '0.0.0.0',
+          'screencap > /tmp/screenshot.ppm',
+        ],
+        workingDirectory: anyNamed('workingDirectory'),
+        environment: anyNamed('environment'),
+      )).thenAnswer((_) async => ProcessResult(0, 1, '', '<error-message>'));
+
+      await expectLater(
+        () => device.takeScreenshot(globals.fs.file('file.ppm')),
+        throwsA(equals('Could not take a screenshot on device tester:\n<error-message>')),
+      );
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager,
+      Platform: () => FakePlatform(
+        environment: <String, String>{
+          'FUCHSIA_SSH_CONFIG': '/fuchsia/out/default/.ssh',
+        },
+        operatingSystem: 'linux',
+      ),
+    }, testOn: 'posix');
+
+    testUsingContext('takeScreenshot throws if scp failed', () async {
+      final FuchsiaDevice device = FuchsiaDevice('0.0.0.0', name: 'tester');
+
+      when(mockProcessManager.run(
+        const <String>[
+          'ssh',
+          '-F',
+          '/fuchsia/out/default/.ssh',
+          '0.0.0.0',
+          'screencap > /tmp/screenshot.ppm',
+        ],
+        workingDirectory: anyNamed('workingDirectory'),
+        environment: anyNamed('environment'),
+      )).thenAnswer((_) async => ProcessResult(0, 0, '', ''));
+
+      when(mockProcessManager.run(
+        const <String>[
+          'scp',
+          '-F',
+          '/fuchsia/out/default/.ssh',
+          '0.0.0.0:/tmp/screenshot.ppm',
+          'file.ppm',
+        ],
+        workingDirectory: anyNamed('workingDirectory'),
+        environment: anyNamed('environment'),
+      )).thenAnswer((_) async => ProcessResult(0, 1, '', '<error-message>'));
+
+       when(mockProcessManager.run(
+        const <String>[
+          'ssh',
+          '-F',
+          '/fuchsia/out/default/.ssh',
+          '0.0.0.0',
+          'rm /tmp/screenshot.ppm',
+        ],
+        workingDirectory: anyNamed('workingDirectory'),
+        environment: anyNamed('environment'),
+      )).thenAnswer((_) async => ProcessResult(0, 0, '', ''));
+
+      await expectLater(
+        () => device.takeScreenshot(globals.fs.file('file.ppm')),
+        throwsA(equals('Failed to copy screenshot from device:\n<error-message>')),
+      );
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager,
+      Platform: () => FakePlatform(
+        environment: <String, String>{
+          'FUCHSIA_SSH_CONFIG': '/fuchsia/out/default/.ssh',
+        },
+        operatingSystem: 'linux',
+      ),
+    }, testOn: 'posix');
+
+    testUsingContext("takeScreenshot prints error if can't delete file from device", () async {
+      final FuchsiaDevice device = FuchsiaDevice('0.0.0.0', name: 'tester');
+
+      when(mockProcessManager.run(
+        const <String>[
+          'ssh',
+          '-F',
+          '/fuchsia/out/default/.ssh',
+          '0.0.0.0',
+          'screencap > /tmp/screenshot.ppm',
+        ],
+        workingDirectory: anyNamed('workingDirectory'),
+        environment: anyNamed('environment'),
+      )).thenAnswer((_) async => ProcessResult(0, 0, '', ''));
+
+      when(mockProcessManager.run(
+        const <String>[
+          'scp',
+          '-F',
+          '/fuchsia/out/default/.ssh',
+          '0.0.0.0:/tmp/screenshot.ppm',
+          'file.ppm',
+        ],
+        workingDirectory: anyNamed('workingDirectory'),
+        environment: anyNamed('environment'),
+      )).thenAnswer((_) async => ProcessResult(0, 0, '', ''));
+
+       when(mockProcessManager.run(
+        const <String>[
+          'ssh',
+          '-F',
+          '/fuchsia/out/default/.ssh',
+          '0.0.0.0',
+          'rm /tmp/screenshot.ppm',
+        ],
+        workingDirectory: anyNamed('workingDirectory'),
+        environment: anyNamed('environment'),
+      )).thenAnswer((_) async => ProcessResult(0, 1, '', '<error-message>'));
+
+      try {
+        await device.takeScreenshot(globals.fs.file('file.ppm'));
+      } on Exception {
+        assert(false);
+      }
+      expect(
+        testLogger.errorText,
+        contains('Failed to delete screenshot.ppm from the device:\n<error-message>'),
+      );
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager,
+      Platform: () => FakePlatform(
+        environment: <String, String>{
+          'FUCHSIA_SSH_CONFIG': '/fuchsia/out/default/.ssh',
+        },
+        operatingSystem: 'linux',
+      ),
+    }, testOn: 'posix');
+
+    testUsingContext('takeScreenshot returns', () async {
+      final FuchsiaDevice device = FuchsiaDevice('0.0.0.0', name: 'tester');
+
+      when(mockProcessManager.run(
+        const <String>[
+          'ssh',
+          '-F',
+          '/fuchsia/out/default/.ssh',
+          '0.0.0.0',
+          'screencap > /tmp/screenshot.ppm',
+        ],
+        workingDirectory: anyNamed('workingDirectory'),
+        environment: anyNamed('environment'),
+      )).thenAnswer((_) async => ProcessResult(0, 0, '', ''));
+
+      when(mockProcessManager.run(
+        const <String>[
+          'scp',
+          '-F',
+          '/fuchsia/out/default/.ssh',
+          '0.0.0.0:/tmp/screenshot.ppm',
+          'file.ppm',
+        ],
+        workingDirectory: anyNamed('workingDirectory'),
+        environment: anyNamed('environment'),
+      )).thenAnswer((_) async => ProcessResult(0, 0, '', ''));
+
+       when(mockProcessManager.run(
+        const <String>[
+          'ssh',
+          '-F',
+          '/fuchsia/out/default/.ssh',
+          '0.0.0.0',
+          'rm /tmp/screenshot.ppm',
+        ],
+        workingDirectory: anyNamed('workingDirectory'),
+        environment: anyNamed('environment'),
+      )).thenAnswer((_) async => ProcessResult(0, 0, '', ''));
+
+      try {
+        await device.takeScreenshot(globals.fs.file('file.ppm'));
+      } on Exception catch (e) {
+        fail('Unexpected exception: $e');
+      }
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager,
+      Platform: () => FakePlatform(
+        environment: <String, String>{
+          'FUCHSIA_SSH_CONFIG': '/fuchsia/out/default/.ssh',
+        },
+        operatingSystem: 'linux',
+      ),
+    }, testOn: 'posix');
+  });
+
+
   group(FuchsiaIsolateDiscoveryProtocol, () {
     MockPortForwarder portForwarder;
     MockVMService vmService;
@@ -492,7 +735,7 @@ void main() {
         app = BuildableFuchsiaApp(project: FlutterProject.current().fuchsia);
       }
 
-      final DebuggingOptions debuggingOptions = DebuggingOptions.disabled(BuildInfo(mode, null));
+      final DebuggingOptions debuggingOptions = DebuggingOptions.disabled(BuildInfo(mode, null, treeShakeIcons: false));
       return await device.startApp(
         app,
         prebuiltApplication: prebuilt,
@@ -525,7 +768,7 @@ void main() {
 
       final FuchsiaApp app = FuchsiaApp.fromPrebuiltApp(far);
       final DebuggingOptions debuggingOptions =
-          DebuggingOptions.disabled(const BuildInfo(BuildMode.release, null));
+          DebuggingOptions.disabled(const BuildInfo(BuildMode.release, null, treeShakeIcons: false));
       final LaunchResult launchResult = await device.startApp(app,
           prebuiltApplication: true,
           debuggingOptions: debuggingOptions);
@@ -587,7 +830,7 @@ void main() {
       OperatingSystemUtils: () => osUtils,
     });
 
-    testUsingContext('fail with correct LaunchResult when dev_finder fails', () async {
+    testUsingContext('fail with correct LaunchResult when device-finder fails', () async {
       final LaunchResult launchResult =
           await setupAndStartApp(prebuilt: true, mode: BuildMode.release);
       expect(launchResult.started, isFalse);
@@ -660,6 +903,7 @@ void main() {
 
     setUp(() {
       sshConfig = MockFile();
+      when(sshConfig.existsSync()).thenReturn(true);
       when(sshConfig.absolute).thenReturn(sshConfig);
 
       mockSuccessProcessManager = MockProcessManager();
@@ -685,6 +929,15 @@ void main() {
       when(emptyStdoutProcessResult.exitCode).thenReturn(0);
       when<String>(emptyStdoutProcessResult.stdout as String).thenReturn('');
       when<String>(emptyStdoutProcessResult.stderr as String).thenReturn('');
+    });
+
+    testUsingContext('does not throw on non-existant ssh config', () async {
+      final FuchsiaDevice device = FuchsiaDevice('123');
+      expect(await device.sdkNameAndVersion, equals('Fuchsia'));
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockSuccessProcessManager,
+      FuchsiaArtifacts: () => FuchsiaArtifacts(sshConfig: null),
+      FuchsiaSdk: () => MockFuchsiaSdk(),
     });
 
     testUsingContext('returns what we get from the device on success', () async {
@@ -731,8 +984,6 @@ class MockProcessManager extends Mock implements ProcessManager {}
 
 class MockProcessResult extends Mock implements ProcessResult {}
 
-class MockProcessUtils extends Mock implements ProcessUtils {}
-
 class MockFile extends Mock implements File {}
 
 class MockProcess extends Mock implements Process {}
@@ -773,7 +1024,7 @@ class MockFuchsiaDevice extends Mock implements FuchsiaDevice {
   final bool _ipv6;
 
   @override
-  Future<bool> get ipv6 async => _ipv6;
+  bool get ipv6 => _ipv6;
 
   @override
   final String id;
@@ -1118,7 +1369,7 @@ class FailingKernelCompiler implements FuchsiaKernelCompiler {
 
 class FakeFuchsiaDevFinder implements FuchsiaDevFinder {
   @override
-  Future<List<String>> list() async {
+  Future<List<String>> list({ Duration timeout }) async {
     return <String>['192.168.42.172 scare-cable-skip-joy'];
   }
 
@@ -1130,7 +1381,7 @@ class FakeFuchsiaDevFinder implements FuchsiaDevFinder {
 
 class FailingDevFinder implements FuchsiaDevFinder {
   @override
-  Future<List<String>> list() async {
+  Future<List<String>> list({ Duration timeout }) async {
     return null;
   }
 

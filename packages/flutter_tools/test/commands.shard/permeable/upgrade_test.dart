@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter_tools/src/base/common.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 
@@ -30,7 +29,14 @@ void main() {
     MockProcessManager processManager;
     FakePlatform fakePlatform;
     final MockFlutterVersion flutterVersion = MockFlutterVersion();
-    const GitTagVersion gitTagVersion = GitTagVersion(1, 2, 3, 4, 5, 'asd');
+    const GitTagVersion gitTagVersion = GitTagVersion(
+      x: 1,
+      y: 2,
+      z: 3,
+      hotfix: 4,
+      commits: 5,
+      hash: 'asd',
+    );
     when(flutterVersion.channel).thenReturn('dev');
 
     setUp(() {
@@ -58,24 +64,26 @@ void main() {
 
     testUsingContext('throws on unknown tag, official branch,  noforce', () async {
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        false,
-        false,
-        const GitTagVersion.unknown(),
-        flutterVersion,
+        force: false,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: const GitTagVersion.unknown(),
+        flutterVersion: flutterVersion,
       );
-      expect(result, throwsA(isInstanceOf<ToolExit>()));
+      expect(result, throwsToolExit());
     }, overrides: <Type, Generator>{
       Platform: () => fakePlatform,
     });
 
     testUsingContext('does not throw on unknown tag, official branch, force', () async {
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        true,
-        false,
-        const GitTagVersion.unknown(),
-        flutterVersion,
+        force: true,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: const GitTagVersion.unknown(),
+        flutterVersion: flutterVersion,
       );
-      expect(await result, null);
+      expect(await result, FlutterCommandResult.success());
     }, overrides: <Type, Generator>{
       ProcessManager: () => processManager,
       Platform: () => fakePlatform,
@@ -84,12 +92,13 @@ void main() {
     testUsingContext('throws tool exit with uncommitted changes', () async {
       fakeCommandRunner.willHaveUncomittedChanges = true;
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        false,
-        false,
-        gitTagVersion,
-        flutterVersion,
+        force: false,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: gitTagVersion,
+        flutterVersion: flutterVersion,
       );
-      expect(result, throwsA(isA<ToolExit>()));
+      expect(result, throwsToolExit());
     }, overrides: <Type, Generator>{
       Platform: () => fakePlatform,
     });
@@ -98,39 +107,42 @@ void main() {
       fakeCommandRunner.willHaveUncomittedChanges = true;
 
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        true,
-        false,
-        gitTagVersion,
-        flutterVersion,
+        force: true,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: gitTagVersion,
+        flutterVersion: flutterVersion,
       );
-      expect(await result, null);
+      expect(await result, FlutterCommandResult.success());
     }, overrides: <Type, Generator>{
       ProcessManager: () => processManager,
       Platform: () => fakePlatform,
     });
 
-    testUsingContext('Doesn\'t throw on known tag, dev branch, no force', () async {
+    testUsingContext("Doesn't throw on known tag, dev branch, no force", () async {
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        false,
-        false,
-        gitTagVersion,
-        flutterVersion,
+        force: false,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: gitTagVersion,
+        flutterVersion: flutterVersion,
       );
-      expect(await result, null);
+      expect(await result, FlutterCommandResult.success());
     }, overrides: <Type, Generator>{
       ProcessManager: () => processManager,
       Platform: () => fakePlatform,
     });
 
-    testUsingContext('Doesn\'t continue on known tag, dev branch, no force, already up-to-date', () async {
+    testUsingContext("Doesn't continue on known tag, dev branch, no force, already up-to-date", () async {
       fakeCommandRunner.alreadyUpToDate = true;
       final Future<FlutterCommandResult> result = fakeCommandRunner.runCommand(
-        false,
-        false,
-        gitTagVersion,
-        flutterVersion,
+        force: false,
+        continueFlow: false,
+        testFlow: false,
+        gitTagVersion: gitTagVersion,
+        flutterVersion: flutterVersion,
       );
-      expect(await result, null);
+      expect(await result, FlutterCommandResult.success());
       verifyNever(globals.processManager.start(
         <String>[
           globals.fs.path.join('bin', 'flutter'),
@@ -226,7 +238,7 @@ void main() {
         fakeProcessManager = FakeProcessManager.list(<FakeCommand>[
           const FakeCommand(
             command: <String>[
-              'git', 'describe', '--match', 'v*.*.*', '--first-parent', '--long', '--tags',
+              'git', 'describe', '--match', '*.*.*', '--first-parent', '--long', '--tags',
             ],
             stdout: 'v1.12.16-19-gb45b676af',
           ),
@@ -252,12 +264,17 @@ void main() {
           ],
         );
 
-        expect(json.decode(flutterToolState.readAsStringSync()),
-          containsPair('redisplay-welcome-message', true));
+        expect(
+          json.decode(flutterToolState.readAsStringSync()),
+          containsPair('redisplay-welcome-message', true),
+        );
       }, overrides: <Type, Generator>{
         FlutterVersion: () => mockFlutterVersion,
         ProcessManager: () => fakeProcessManager,
-        PersistentToolState: () => PersistentToolState(flutterToolState),
+        PersistentToolState: () => PersistentToolState.test(
+          directory: tempDir,
+          logger: testLogger,
+        ),
       });
     });
   });
@@ -275,12 +292,12 @@ void main() {
 
       expect(_match(' rename {packages/flutter/doc => dev/docs}/styles.html (92%)'), true);
       expect(_match(' delete mode 100644 doc/index.html'), true);
-      expect(_match(' create mode 100644 examples/flutter_gallery/lib/gallery/demo.dart'), true);
+      expect(_match(' create mode 100644 dev/integration_tests/flutter_gallery/lib/gallery/demo.dart'), true);
 
       expect(_match('Fast-forward'), true);
     });
 
-    test('regex doesn\'t match', () {
+    test("regex doesn't match", () {
       expect(_match('Updating 79cfe1e..5046107'), false);
       expect(_match('229 files changed, 6179 insertions(+), 3065 deletions(-)'), false);
     });
@@ -325,9 +342,6 @@ class FakeUpgradeCommandRunner extends UpgradeCommandRunner {
 
   @override
   Future<bool> hasUncomittedChanges() async => willHaveUncomittedChanges;
-
-  @override
-  Future<void> resetChanges(GitTagVersion gitTagVersion) async {}
 
   @override
   Future<void> upgradeChannel(FlutterVersion flutterVersion) async {}

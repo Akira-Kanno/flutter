@@ -8,6 +8,7 @@ import 'package:args/command_runner.dart';
 
 import '../base/common.dart';
 import '../base/file_system.dart';
+import '../base/io.dart';
 import '../base/time.dart';
 import '../base/utils.dart';
 import '../build_info.dart';
@@ -22,7 +23,6 @@ import '../run_cold.dart';
 import '../run_hot.dart';
 import '../runner/flutter_command.dart';
 import '../tracing.dart';
-import '../version.dart';
 import '../web/web_runner.dart';
 import 'daemon.dart';
 
@@ -30,7 +30,7 @@ abstract class RunCommandBase extends FlutterCommand with DeviceBasedDevelopment
   // Used by run and drive commands.
   RunCommandBase({ bool verboseHelp = false }) {
     addBuildModeFlags(defaultToRelease: false, verboseHelp: verboseHelp);
-    usesDartDefines();
+    usesDartDefineOption();
     usesFlavorOption();
     argParser
       ..addFlag('trace-startup',
@@ -102,6 +102,18 @@ class RunCommand extends RunCommandBase {
         help: 'Enable tracing of Skia code. This is useful when debugging '
               'the GPU thread. By default, Flutter will not log skia code.',
       )
+      ..addOption('trace-whitelist',
+        help: 'Filters out all trace events except those that are specified in '
+              'this comma separated list of whitelisted prefixes.',
+        valueHelp: 'foo,bar',
+      )
+      ..addFlag('endless-trace-buffer',
+        negatable: false,
+        help: 'Enable tracing to the endless tracer. This is useful when '
+              'recording huge amounts of traces. If we need to use endless buffer to '
+              'record startup traces, we can combine the ("--trace-startup"). '
+              'For exemple, flutter run --trace-startup --endless-trace-buffer. ',
+      )
       ..addFlag('trace-systrace',
         negatable: false,
         help: 'Enable tracing to the system tracer. This is only useful on '
@@ -113,7 +125,7 @@ class RunCommand extends RunCommandBase {
               'or just dump the trace as soon as the application is running. The first frame '
               'is detected by looking for a Timeline event with the name '
               '"${Tracing.firstUsefulFrameEventName}". '
-              'By default, the widgets library\'s binding takes care of sending this event. ',
+              "By default, the widgets library's binding takes care of sending this event. ",
       )
       ..addFlag('use-test-fonts',
         negatable: true,
@@ -186,16 +198,17 @@ class RunCommand extends RunCommandBase {
         hide: true,
         help: 'Whether to automatically invoke webOnlyInitializePlatform.',
       )
+      // TODO(jonahwilliams): Off by default with investigating whether this
+      // is slower for certain use cases.
+      // See: https://github.com/flutter/flutter/issues/49499
       ..addFlag('fast-start',
         negatable: true,
         defaultsTo: false,
-        hide: true,
         help: 'Whether to quickly bootstrap applications with a minimal app. '
               'Currently this is only supported on Android devices. This option '
               'cannot be paired with --use-application-binary.'
       )
       ..addOption(FlutterOptions.kExtraFrontEndOptions, hide: true)
-      ..addOption(FlutterOptions.kExtraGenSnapshotOptions, hide: true)
       ..addMultiOption(FlutterOptions.kEnableExperiment,
         splitCommas: true,
         hide: true,
@@ -318,10 +331,6 @@ class RunCommand extends RunCommandBase {
       await super.validateCommand();
     }
 
-    if (boolArg('fast-start') && runningWithPrebuiltApplication) {
-      throwToolExit('--fast-start is not supported with --use-application-binary');
-    }
-
     devices = await findAllTargetDevices();
     if (devices == null) {
       throwToolExit(null);
@@ -333,6 +342,9 @@ class RunCommand extends RunCommandBase {
 
   DebuggingOptions _createDebuggingOptions() {
     final BuildInfo buildInfo = getBuildInfo();
+    final int browserDebugPort = featureFlags.isWebEnabled && argResults.wasParsed('web-browser-debug-port')
+      ? int.parse(stringArg('web-browser-debug-port'))
+      : null;
     if (buildInfo.mode.isRelease) {
       return DebuggingOptions.disabled(
         buildInfo,
@@ -340,6 +352,8 @@ class RunCommand extends RunCommandBase {
         hostname: featureFlags.isWebEnabled ? stringArg('web-hostname') : '',
         port: featureFlags.isWebEnabled ? stringArg('web-port') : '',
         webEnableExposeUrl: featureFlags.isWebEnabled && boolArg('web-allow-expose-url'),
+        webRunHeadless: featureFlags.isWebEnabled && boolArg('web-run-headless'),
+        webBrowserDebugPort: browserDebugPort,
       );
     } else {
       return DebuggingOptions.enabled(
@@ -351,7 +365,9 @@ class RunCommand extends RunCommandBase {
         enableSoftwareRendering: boolArg('enable-software-rendering'),
         skiaDeterministicRendering: boolArg('skia-deterministic-rendering'),
         traceSkia: boolArg('trace-skia'),
+        traceWhitelist: stringArg('trace-whitelist'),
         traceSystrace: boolArg('trace-systrace'),
+        endlessTraceBuffer: boolArg('endless-trace-buffer'),
         dumpSkpOnShaderCompilation: dumpSkpOnShaderCompilation,
         cacheSkSL: cacheSkSL,
         deviceVmServicePort: deviceVmservicePort,
@@ -361,10 +377,14 @@ class RunCommand extends RunCommandBase {
         hostname: featureFlags.isWebEnabled ? stringArg('web-hostname') : '',
         port: featureFlags.isWebEnabled ? stringArg('web-port') : '',
         webEnableExposeUrl: featureFlags.isWebEnabled && boolArg('web-allow-expose-url'),
+        webRunHeadless: featureFlags.isWebEnabled && boolArg('web-run-headless'),
+        webBrowserDebugPort: browserDebugPort,
         vmserviceOutFile: stringArg('vmservice-out-file'),
         // Allow forcing fast-start to off to prevent doing more work on devices that
         // don't support it.
-        fastStart: boolArg('fast-start') && devices.every((Device device) => device.supportsFastStart),
+        fastStart: boolArg('fast-start')
+          && !runningWithPrebuiltApplication
+          && devices.every((Device device) => device.supportsFastStart),
       );
     }
   }
@@ -388,7 +408,6 @@ class RunCommand extends RunCommandBase {
         stdoutCommandResponse,
         notifyingLogger: NotifyingLogger(),
         logToStdout: true,
-        dartDefines: dartDefines,
       );
       AppInstance app;
       try {
@@ -405,7 +424,7 @@ class RunCommand extends RunCommandBase {
           dillOutputPath: stringArg('output-dill'),
           ipv6: ipv6,
         );
-      } catch (error) {
+      } on Exception catch (error) {
         throwToolExit(error.toString());
       }
       final DateTime appStartedTime = systemClock.now();
@@ -421,18 +440,12 @@ class RunCommand extends RunCommandBase {
     }
     globals.terminal.usesTerminalUi = true;
 
-    if (argResults['dart-flags'] != null && !FlutterVersion.instance.isMaster) {
+    if (argResults['dart-flags'] != null && !globals.flutterVersion.isMaster) {
       throw UsageException('--dart-flags is not available on the stable '
                            'channel.', null);
     }
 
     for (final Device device in devices) {
-      if (!device.supportsFastStart && boolArg('fast-start')) {
-        globals.printStatus(
-          'Using --fast-start option with device ${device.name}, but this device '
-          'does not support it. Overriding the setting to false.'
-        );
-      }
       if (await device.isLocalEmulator) {
         if (await device.supportsHardwareRendering) {
           final bool enableSoftwareRendering = boolArg('enable-software-rendering') == true;
@@ -474,14 +487,12 @@ class RunCommand extends RunCommandBase {
         await FlutterDevice.create(
           device,
           flutterProject: flutterProject,
-          trackWidgetCreation: boolArg('track-widget-creation'),
           fileSystemRoots: stringsArg('filesystem-root'),
           fileSystemScheme: stringArg('filesystem-scheme'),
           viewFilter: stringArg('isolate-filter'),
           experimentalFlags: expFlags,
           target: stringArg('target'),
-          buildMode: getBuildMode(),
-          dartDefines: dartDefines,
+          buildInfo: getBuildInfo(),
         ),
     ];
     // Only support "web mode" with a single web device due to resident runner
@@ -515,7 +526,6 @@ class RunCommand extends RunCommandBase {
         ipv6: ipv6,
         debuggingOptions: _createDebuggingOptions(),
         stayResident: stayResident,
-        dartDefines: dartDefines,
         urlTunneller: null,
       );
     } else {

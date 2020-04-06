@@ -145,9 +145,15 @@ class _DropdownMenuItemButtonState<T> extends State<_DropdownMenuItemButton<T>> 
   }
 
   void _handleOnTap() {
+    final DropdownMenuItem<T> dropdownMenuItem = widget.route.items[widget.itemIndex].item;
+
+    if (dropdownMenuItem.onTap != null) {
+      dropdownMenuItem.onTap();
+    }
+
     Navigator.pop(
       context,
-      _DropdownRouteResult<T>(widget.route.items[widget.itemIndex].item.value),
+      _DropdownRouteResult<T>(dropdownMenuItem.value),
     );
   }
 
@@ -197,12 +203,14 @@ class _DropdownMenu<T> extends StatefulWidget {
     this.route,
     this.buttonRect,
     this.constraints,
+    this.dropdownColor,
   }) : super(key: key);
 
   final _DropdownRoute<T> route;
   final EdgeInsets padding;
   final Rect buttonRect;
   final BoxConstraints constraints;
+  final Color dropdownColor;
 
   @override
   _DropdownMenuState<T> createState() => _DropdownMenuState<T>();
@@ -259,7 +267,7 @@ class _DropdownMenuState<T> extends State<_DropdownMenu<T>> {
       opacity: _fadeOpacity,
       child: CustomPaint(
         painter: _DropdownMenuPainter(
-          color: Theme.of(context).canvasColor,
+          color: widget.dropdownColor ?? Theme.of(context).canvasColor,
           elevation: route.elevation,
           selectedIndex: route.selectedIndex,
           resize: _resize,
@@ -394,6 +402,7 @@ class _DropdownRoute<T> extends PopupRoute<_DropdownRouteResult<T>> {
     @required this.style,
     this.barrierLabel,
     this.itemHeight,
+    this.dropdownColor,
   }) : assert(style != null),
        itemHeights = List<double>.filled(items.length, itemHeight ?? kMinInteractiveDimension);
 
@@ -405,6 +414,7 @@ class _DropdownRoute<T> extends PopupRoute<_DropdownRouteResult<T>> {
   final ThemeData theme;
   final TextStyle style;
   final double itemHeight;
+  final Color dropdownColor;
 
   final List<double> itemHeights;
   ScrollController scrollController;
@@ -435,6 +445,7 @@ class _DropdownRoute<T> extends PopupRoute<_DropdownRouteResult<T>> {
           elevation: elevation,
           theme: theme,
           style: style,
+          dropdownColor: dropdownColor,
         );
       }
     );
@@ -520,6 +531,7 @@ class _DropdownRoutePage<T> extends StatelessWidget {
     this.elevation = 8,
     this.theme,
     this.style,
+    this.dropdownColor,
   }) : super(key: key);
 
   final _DropdownRoute<T> route;
@@ -531,6 +543,7 @@ class _DropdownRoutePage<T> extends StatelessWidget {
   final int elevation;
   final ThemeData theme;
   final TextStyle style;
+  final Color dropdownColor;
 
   @override
   Widget build(BuildContext context) {
@@ -553,6 +566,7 @@ class _DropdownRoutePage<T> extends StatelessWidget {
       padding: padding.resolve(textDirection),
       buttonRect: buttonRect,
       constraints: constraints,
+      dropdownColor: dropdownColor,
     );
 
     if (theme != null)
@@ -656,10 +670,14 @@ class DropdownMenuItem<T> extends _DropdownMenuItemContainer {
   /// The [child] argument is required.
   const DropdownMenuItem({
     Key key,
+    this.onTap,
     this.value,
     @required Widget child,
   }) : assert(child != null),
        super(key: key, child: child);
+
+  /// Called when the dropdown menu item is tapped.
+  final VoidCallback onTap;
 
   /// The value to return if the user selects this menu item.
   ///
@@ -707,7 +725,7 @@ class DropdownButtonHideUnderline extends InheritedWidget {
 /// dropdown's value. It should also call [State.setState] to rebuild the
 /// dropdown with the new value.
 ///
-/// {@tool sample --template=stateful_widget_scaffold_center}
+/// {@tool dartpad --template=stateful_widget_scaffold_center}
 ///
 /// This sample shows a `DropdownButton` with a large arrow icon,
 /// purple text style, and bold purple underline, whose value is one of "One",
@@ -779,6 +797,10 @@ class DropdownButton<T> extends StatefulWidget {
   /// The [elevation] and [iconSize] arguments must not be null (they both have
   /// defaults, so do not need to be specified). The boolean [isDense] and
   /// [isExpanded] arguments must not be null.
+  ///
+  /// The [dropdownColor] argument specifies the background color of the
+  /// dropdown when it is open. If it is null, the current theme's
+  /// [ThemeData.canvasColor] will be used instead.
   DropdownButton({
     Key key,
     @required this.items,
@@ -787,6 +809,7 @@ class DropdownButton<T> extends StatefulWidget {
     this.hint,
     this.disabledHint,
     @required this.onChanged,
+    this.onTap,
     this.elevation = 8,
     this.style,
     this.underline,
@@ -800,11 +823,12 @@ class DropdownButton<T> extends StatefulWidget {
     this.focusColor,
     this.focusNode,
     this.autofocus = false,
+    this.dropdownColor,
   }) : assert(items == null || items.isEmpty || value == null ||
               items.where((DropdownMenuItem<T> item) {
                 return item.value == value;
               }).length == 1,
-                'There should be exactly one item with [DropdownButton]\'s value: '
+                "There should be exactly one item with [DropdownButton]'s value: "
                 '$value. \n'
                 'Either zero or 2 or more [DropdownMenuItem]s were detected '
                 'with the same value',
@@ -858,6 +882,14 @@ class DropdownButton<T> extends StatefulWidget {
   /// {@endtemplate}
   final ValueChanged<T> onChanged;
 
+  /// Called when the dropdown button is tapped.
+  ///
+  /// This is distinct from [onChanged], which is called when the user
+  /// selects an item from the dropdown.
+  ///
+  /// The callback will not be invoked if the dropdown button is disabled.
+  final VoidCallback onTap;
+
   /// A builder to customize the dropdown buttons corresponding to the
   /// [DropdownMenuItem]s in [items].
   ///
@@ -865,7 +897,7 @@ class DropdownButton<T> extends StatefulWidget {
   /// from the list corresponds to the [DropdownMenuItem] of the same index
   /// in [items].
   ///
-  /// {@tool sample --template=stateful_widget_scaffold}
+  /// {@tool dartpad --template=stateful_widget_scaffold}
   ///
   /// This sample shows a `DropdownButton` with a button with [Text] that
   /// corresponds to but is unique from [DropdownMenuItem].
@@ -916,7 +948,7 @@ class DropdownButton<T> extends StatefulWidget {
   /// To use a separate text style for selected item when it's displayed within
   /// the dropdown button,, consider using [selectedItemBuilder].
   ///
-  /// {@tool sample --template=stateful_widget_scaffold}
+  /// {@tool dartpad --template=stateful_widget_scaffold}
   ///
   /// This sample shows a `DropdownButton` with a dropdown button text style
   /// that is different than its menu items.
@@ -958,7 +990,7 @@ class DropdownButton<T> extends StatefulWidget {
   /// ```
   /// {@end-tool}
   ///
-  /// Defaults to the [TextTheme.subhead] value of the current
+  /// Defaults to the [TextTheme.subtitle1] value of the current
   /// [ThemeData.textTheme] of the current [Theme].
   final TextStyle style;
 
@@ -1029,6 +1061,12 @@ class DropdownButton<T> extends StatefulWidget {
 
   /// {@macro flutter.widgets.Focus.autofocus}
   final bool autofocus;
+
+  /// The background color of the dropdown.
+  ///
+  /// If it is not provided, the theme's [ThemeData.canvasColor] will be used
+  /// instead.
+  final Color dropdownColor;
 
   @override
   _DropdownButtonState<T> createState() => _DropdownButtonState<T>();
@@ -1128,7 +1166,7 @@ class _DropdownButtonState<T> extends State<DropdownButton<T>> with WidgetsBindi
     }
   }
 
-  TextStyle get _textStyle => widget.style ?? Theme.of(context).textTheme.subhead;
+  TextStyle get _textStyle => widget.style ?? Theme.of(context).textTheme.subtitle1;
 
   void _handleTap() {
     final RenderBox itemBox = context.findRenderObject() as RenderBox;
@@ -1143,6 +1181,17 @@ class _DropdownButtonState<T> extends State<DropdownButton<T>> with WidgetsBindi
       menuItems[index] = _MenuItem<T>(
         item: widget.items[index],
         onLayout: (Size size) {
+          // If [_dropdownRoute] is null and onLayout is called, this means
+          // that performLayout was called on a _DropdownRoute that has not
+          // left the widget tree but is already on its way out.
+          //
+          // Since onLayout is used primarily to collect the desired heights
+          // of each menu item before laying them out, not having the _DropdownRoute
+          // collect each item's height to lay out is fine since the route is
+          // already on its way out.
+          if (_dropdownRoute == null)
+            return;
+
           _dropdownRoute.itemHeights[index] = size.height;
         },
       );
@@ -1159,15 +1208,20 @@ class _DropdownButtonState<T> extends State<DropdownButton<T>> with WidgetsBindi
       style: _textStyle,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       itemHeight: widget.itemHeight,
+      dropdownColor: widget.dropdownColor,
     );
 
     Navigator.push(context, _dropdownRoute).then<void>((_DropdownRouteResult<T> newValue) {
-      _dropdownRoute = null;
+      _removeDropdownRoute();
       if (!mounted || newValue == null)
         return;
       if (widget.onChanged != null)
         widget.onChanged(newValue.result);
     });
+
+    if (widget.onTap != null) {
+      widget.onTap();
+    }
   }
 
   Action _createAction() {
@@ -1184,7 +1238,7 @@ class _DropdownButtonState<T> extends State<DropdownButton<T>> with WidgetsBindi
   // Similarly, we don't reduce the height of the button so much that its icon
   // would be clipped.
   double get _denseButtonHeight {
-    final double fontSize = _textStyle.fontSize ?? Theme.of(context).textTheme.subhead.fontSize;
+    final double fontSize = _textStyle.fontSize ?? Theme.of(context).textTheme.subtitle1.fontSize;
     return math.max(fontSize, math.max(widget.iconSize, _kDenseButtonHeight));
   }
 
@@ -1391,6 +1445,7 @@ class DropdownButtonFormField<T> extends FormField<T> {
     DropdownButtonBuilder selectedItemBuilder,
     Widget hint,
     @required this.onChanged,
+    VoidCallback onTap,
     this.decoration = const InputDecoration(),
     FormFieldSetter<T> onSaved,
     FormFieldValidator<T> validator,
@@ -1409,7 +1464,7 @@ class DropdownButtonFormField<T> extends FormField<T> {
               items.where((DropdownMenuItem<T> item) {
                 return item.value == value;
               }).length == 1,
-                'There should be exactly one item with [DropdownButton]\'s value: '
+                "There should be exactly one item with [DropdownButton]'s value: "
                 '$value. \n'
                 'Either zero or 2 or more [DropdownMenuItem]s were detected '
                 'with the same value',
@@ -1427,19 +1482,21 @@ class DropdownButtonFormField<T> extends FormField<T> {
          validator: validator,
          autovalidate: autovalidate,
          builder: (FormFieldState<T> field) {
+           final _DropdownButtonFormFieldState<T> state = field as _DropdownButtonFormFieldState<T>;
            final InputDecoration effectiveDecoration = decoration.applyDefaults(
              Theme.of(field.context).inputDecorationTheme,
            );
            return InputDecorator(
              decoration: effectiveDecoration.copyWith(errorText: field.errorText),
-             isEmpty: value == null,
+             isEmpty: state.value == null,
              child: DropdownButtonHideUnderline(
                child: DropdownButton<T>(
-                 value: value,
+                 value: state.value,
                  items: items,
                  selectedItemBuilder: selectedItemBuilder,
                  hint: hint,
-                 onChanged: onChanged == null ? null : field.didChange,
+                 onChanged: onChanged == null ? null : state.didChange,
+                 onTap: onTap,
                  disabledHint: disabledHint,
                  elevation: elevation,
                  style: style,

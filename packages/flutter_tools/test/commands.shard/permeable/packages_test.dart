@@ -5,9 +5,9 @@
 import 'dart:async';
 
 import 'package:args/command_runner.dart';
+import 'package:flutter_tools/src/base/bot_detector.dart';
 import 'package:flutter_tools/src/base/file_system.dart' hide IOSink;
 import 'package:flutter_tools/src/base/io.dart';
-import 'package:flutter_tools/src/base/utils.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/packages.dart';
 import 'package:flutter_tools/src/dart/pub.dart';
@@ -18,24 +18,8 @@ import 'package:flutter_tools/src/globals.dart' as globals;
 
 import '../../src/common.dart';
 import '../../src/context.dart';
-import '../../src/mocks.dart' show MockProcessManager, MockStdio, PromptingProcess;
+import '../../src/mocks.dart' show MockProcessManager, MockStdio, PromptingProcess, AlwaysTrueBotDetector, AlwaysFalseBotDetector;
 import '../../src/testbed.dart';
-
-class AlwaysTrueBotDetector implements BotDetector {
-  const AlwaysTrueBotDetector();
-
-  @override
-  bool get isRunningOnBot => true;
-}
-
-
-class AlwaysFalseBotDetector implements BotDetector {
-  const AlwaysFalseBotDetector();
-
-  @override
-  bool get isRunningOnBot => false;
-}
-
 
 void main() {
   Cache.disableLocking();
@@ -424,6 +408,27 @@ void main() {
       Pub: () => const Pub(),
     });
 
+    testUsingContext('pub publish input fails', () async {
+      final PromptingProcess process = PromptingProcess(stdinError: true);
+      mockProcessManager.processFactory = (List<String> commands) => process;
+      final Future<void> runPackages = createTestCommandRunner(PackagesCommand()).run(<String>['pub', 'publish']);
+      final Future<void> runPrompt = process.showPrompt('Proceed (y/n)? ', <String>['hello', 'world']);
+      final Future<void> simulateUserInput = Future<void>(() {
+        mockStdio.simulateStdin('y');
+      });
+      await Future.wait<void>(<Future<void>>[runPackages, runPrompt, simulateUserInput]);
+      final List<String> commands = mockProcessManager.commands;
+      expect(commands, hasLength(2));
+      expect(commands[0], matches(r'dart-sdk[\\/]bin[\\/]pub'));
+      expect(commands[1], 'publish');
+      // We get a trace message about the write to stdin failing.
+      expect(testLogger.traceText, contains('Echoing stdin to the pub subprocess failed'));
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager,
+      Stdio: () => mockStdio,
+      Pub: () => const Pub(),
+    });
+
     testUsingContext('publish', () async {
       await createTestCommandRunner(PackagesCommand()).run(<String>['pub', 'publish']);
       final List<String> commands = mockProcessManager.commands;
@@ -509,6 +514,19 @@ void main() {
       expect(commands[0], matches(r'dart-sdk[\\/]bin[\\/]pub'));
       expect(commands[1], 'global');
       expect(commands[2], 'list');
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager,
+      Stdio: () => mockStdio,
+      BotDetector: () => const AlwaysTrueBotDetector(),
+      Pub: () => const Pub(),
+    });
+
+    testUsingContext('outdated', () async {
+      await createTestCommandRunner(PackagesCommand()).run(<String>['packages', 'outdated']);
+      final List<String> commands = mockProcessManager.commands;
+      expect(commands, hasLength(2));
+      expect(commands[0], matches(r'dart-sdk[\\/]bin[\\/]pub'));
+      expect(commands[1], 'outdated');
     }, overrides: <Type, Generator>{
       ProcessManager: () => mockProcessManager,
       Stdio: () => mockStdio,

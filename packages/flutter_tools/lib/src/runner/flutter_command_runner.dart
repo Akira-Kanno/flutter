@@ -8,6 +8,7 @@ import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:completion/completion.dart';
 import 'package:file/file.dart';
+import 'package:meta/meta.dart';
 
 import '../artifacts.dart';
 import '../base/common.dart';
@@ -22,9 +23,7 @@ import '../convert.dart';
 import '../dart/package_map.dart';
 import '../device.dart';
 import '../globals.dart' as globals;
-import '../reporting/reporting.dart';
 import '../tester/flutter_tester.dart';
-import '../version.dart';
 
 const String kFlutterRootEnvironmentVariableName = 'FLUTTER_ROOT'; // should point to //flutter/ (root of flutter/flutter repo)
 const String kFlutterEngineEnvironmentVariableName = 'FLUTTER_ENGINE'; // should point to //engine/src/ (root of flutter/engine repo)
@@ -132,7 +131,7 @@ class FlutterCommandRunner extends CommandRunner<void> {
     argParser.addFlag('show-test-device',
         negatable: false,
         hide: !verboseHelp,
-        help: 'List the special \'flutter-tester\' device in device listings. '
+        help: "List the special 'flutter-tester' device in device listings. "
               'This headless device is used to\ntest Flutter tooling.');
   }
 
@@ -140,14 +139,14 @@ class FlutterCommandRunner extends CommandRunner<void> {
   ArgParser get argParser => _argParser;
   final ArgParser _argParser = ArgParser(
     allowTrailingOptions: false,
-    usageLineLength: outputPreferences.wrapText ? outputPreferences.wrapColumn : null,
+    usageLineLength: globals.outputPreferences.wrapText ? globals.outputPreferences.wrapColumn : null,
   );
 
   @override
   String get usageFooter {
     return wrapText('Run "flutter help -v" for verbose help output, including less commonly used options.',
-      columnWidth: outputPreferences.wrapColumn,
-      shouldWrap: outputPreferences.wrapText,
+      columnWidth: globals.outputPreferences.wrapColumn,
+      shouldWrap: globals.outputPreferences.wrapText,
     );
   }
 
@@ -155,8 +154,8 @@ class FlutterCommandRunner extends CommandRunner<void> {
   String get usage {
     final String usageWithoutDescription = super.usage.substring(description.length + 2);
     final String prefix = wrapText(description,
-      shouldWrap: outputPreferences.wrapText,
-      columnWidth: outputPreferences.wrapColumn,
+      shouldWrap: globals.outputPreferences.wrapText,
+      columnWidth: globals.outputPreferences.wrapColumn,
     );
     return '$prefix\n\n$usageWithoutDescription';
   }
@@ -190,7 +189,7 @@ class FlutterCommandRunner extends CommandRunner<void> {
       if (script.contains('flutter/examples/')) {
         return script.substring(0, script.indexOf('flutter/examples/') + 8);
       }
-    } catch (error) {
+    } on Exception catch (error) {
       // we don't have a logger at the time this is run
       // (which is why we don't use printTrace here)
       print(userMessages.runnerNoRoot('$error'));
@@ -239,7 +238,7 @@ class FlutterCommandRunner extends CommandRunner<void> {
     // Check for verbose.
     if (topLevelResults['verbose'] as bool) {
       // Override the logger.
-      contextOverrides[Logger] = VerboseLogger(globals.logger, stopwatch: Stopwatch());
+      contextOverrides[Logger] = VerboseLogger(globals.logger);
     }
 
     // Don't set wrapColumns unless the user said to: if it's set, then all
@@ -282,7 +281,7 @@ class FlutterCommandRunner extends CommandRunner<void> {
     final String enginePath = _findEnginePath(topLevelResults);
     if (enginePath != null) {
       contextOverrides.addAll(<Type, dynamic>{
-        Artifacts: Artifacts.getLocalEngine(enginePath, _findEngineBuildPath(topLevelResults, enginePath)),
+        Artifacts: Artifacts.getLocalEngine(_findEngineBuildPath(topLevelResults, enginePath)),
       });
     }
 
@@ -298,19 +297,20 @@ class FlutterCommandRunner extends CommandRunner<void> {
         }
 
         if (topLevelResults['suppress-analytics'] as bool) {
-          flutterUsage.suppressAnalytics = true;
+          globals.flutterUsage.suppressAnalytics = true;
         }
 
         _checkFlutterCopy();
         try {
-          await FlutterVersion.instance.ensureVersionFile();
+          await globals.flutterVersion.ensureVersionFile();
         } on FileSystemException catch (e) {
           globals.printError('Failed to write the version file to the artifact cache: "$e".');
           globals.printError('Please ensure you have permissions in the artifact cache directory.');
           throwToolExit('Failed to write the version file');
         }
-        if (topLevelResults.command?.name != 'upgrade' && topLevelResults['version-check'] as bool) {
-          await FlutterVersion.instance.checkFlutterVersionFreshness();
+        final bool machineFlag = topLevelResults['machine'] as bool;
+        if (topLevelResults.command?.name != 'upgrade' && topLevelResults['version-check'] as bool && !machineFlag) {
+          await globals.flutterVersion.checkFlutterVersionFreshness();
         }
 
         if (topLevelResults.wasParsed('packages')) {
@@ -321,18 +321,19 @@ class FlutterCommandRunner extends CommandRunner<void> {
         deviceManager.specifiedDeviceId = topLevelResults['device-id'] as String;
 
         if (topLevelResults['version'] as bool) {
-          flutterUsage.sendCommand('version');
+          globals.flutterUsage.sendCommand('version');
+          globals.flutterVersion.fetchTagsAndUpdate();
           String status;
-          if (topLevelResults['machine'] as bool) {
-            status = const JsonEncoder.withIndent('  ').convert(FlutterVersion.instance.toJson());
+          if (machineFlag) {
+            status = const JsonEncoder.withIndent('  ').convert(globals.flutterVersion.toJson());
           } else {
-            status = FlutterVersion.instance.toString();
+            status = globals.flutterVersion.toString();
           }
           globals.printStatus(status);
           return;
         }
 
-        if (topLevelResults['machine'] as bool) {
+        if (machineFlag) {
           throwToolExit('The --machine flag is only valid with the --version flag.', exitCode: 2);
         }
         await super.runCommand(topLevelResults);
@@ -353,7 +354,7 @@ class FlutterCommandRunner extends CommandRunner<void> {
 
     if (engineSourcePath == null && globalResults['local-engine'] != null) {
       try {
-        Uri engineUri = PackageMap(PackageMap.globalPackagesPath).map[kFlutterEnginePackageName];
+        Uri engineUri = PackageMap(PackageMap.globalPackagesPath, fileSystem: globals.fs).map[kFlutterEnginePackageName];
         // Skip if sky_engine is the self-contained one.
         if (engineUri != null && globals.fs.identicalSync(globals.fs.path.join(Cache.flutterRoot, 'bin', 'cache', 'pkg', kFlutterEnginePackageName, 'lib'), engineUri.path)) {
           engineUri = null;
@@ -421,6 +422,7 @@ class FlutterCommandRunner extends CommandRunner<void> {
     return EngineBuildPaths(targetEngine: engineBuildPath, hostEngine: engineHostBuildPath);
   }
 
+  @visibleForTesting
   static void initFlutterRoot() {
     Cache.flutterRoot ??= defaultFlutterRoot;
   }
@@ -489,7 +491,7 @@ class FlutterCommandRunner extends CommandRunner<void> {
 
     // Check that the flutter running is that same as the one referenced in the pubspec.
     if (globals.fs.isFileSync(kPackagesFileName)) {
-      final PackageMap packageMap = PackageMap(kPackagesFileName);
+      final PackageMap packageMap = PackageMap(kPackagesFileName, fileSystem: globals.fs);
       Uri flutterUri;
       try {
         flutterUri = packageMap.map['flutter'];

@@ -9,6 +9,8 @@ import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/terminal.dart';
 import 'package:flutter_tools/src/device.dart';
+import 'package:flutter_tools/src/globals.dart' as globals;
+import 'package:flutter_tools/src/version.dart';
 import 'package:flutter_tools/src/vmservice.dart';
 import 'package:json_rpc_2/json_rpc_2.dart' as rpc;
 import 'package:mockito/mockito.dart';
@@ -21,6 +23,8 @@ import '../src/mocks.dart';
 
 class MockPeer implements rpc.Peer {
 
+  Function _versionFn = (dynamic _) => null;
+
   @override
   rpc.ErrorCallback get onUnhandledError => null;
 
@@ -30,13 +34,11 @@ class MockPeer implements rpc.Peer {
   }
 
   @override
-  bool get isClosed {
-    throw 'unexpected call to isClosed';
-  }
+  bool get isClosed => _isClosed;
 
   @override
   Future<dynamic> close() async {
-    throw 'unexpected call to close()';
+    _isClosed = true;
   }
 
   @override
@@ -52,6 +54,9 @@ class MockPeer implements rpc.Peer {
   @override
   void registerMethod(String name, Function callback) {
     registeredMethods.add(name);
+    if (name == 'flutterVersion') {
+      _versionFn = callback;
+    }
   }
 
   @override
@@ -64,6 +69,7 @@ class MockPeer implements rpc.Peer {
   List<String> registeredMethods = <String>[];
 
   bool isolatesEnabled = false;
+  bool _isClosed = false;
 
   Future<void> _getVMLatch;
   Completer<void> _currentGetVMLatchCompleter;
@@ -157,6 +163,9 @@ class MockPeer implements rpc.Peer {
         ] : <dynamic>[],
       };
     }
+    if (method == 'flutterVersion') {
+      return _versionFn(parameters);
+    }
     return null;
   }
 
@@ -168,6 +177,7 @@ class MockPeer implements rpc.Peer {
 
 void main() {
   MockStdio mockStdio;
+  final MockFlutterVersion mockVersion = MockFlutterVersion();
   group('VMService', () {
 
     setUp(() {
@@ -194,10 +204,21 @@ void main() {
       Logger: () => StdoutLogger(
         outputPreferences: OutputPreferences.test(),
         stdio: mockStdio,
-        terminal: AnsiTerminal(stdio: mockStdio, platform: const LocalPlatform()),
+        terminal: AnsiTerminal(
+          stdio: mockStdio,
+          platform: const LocalPlatform(),
+        ),
         timeoutConfiguration: const TimeoutConfiguration(),
       ),
       WebSocketConnector: () => (String url, {CompressionOptions compression}) async => throw const SocketException('test'),
+    });
+
+    testUsingContext('closing VMService closes Peer', () async {
+      final MockPeer mockPeer = MockPeer();
+      final VMService vmService = VMService(mockPeer, null, null, null, null, null, MockDevice(), null);
+      expect(mockPeer.isClosed, equals(false));
+      await vmService.close();
+      expect(mockPeer.isClosed, equals(true));
     });
 
     testUsingContext('refreshViews', () {
@@ -271,8 +292,11 @@ void main() {
       });
     }, overrides: <Type, Generator>{
       Logger: () => StdoutLogger(
-        outputPreferences: outputPreferences,
-        terminal: AnsiTerminal(stdio: mockStdio, platform: const LocalPlatform()),
+        outputPreferences: globals.outputPreferences,
+        terminal: AnsiTerminal(
+          stdio: mockStdio,
+          platform: const LocalPlatform(),
+        ),
         stdio: mockStdio,
         timeoutConfiguration: const TimeoutConfiguration(),
       ),
@@ -288,8 +312,11 @@ void main() {
       });
     }, overrides: <Type, Generator>{
       Logger: () => StdoutLogger(
-        outputPreferences: outputPreferences,
-        terminal: AnsiTerminal(stdio: mockStdio, platform: const LocalPlatform()),
+        outputPreferences: globals.outputPreferences,
+        terminal: AnsiTerminal(
+          stdio: mockStdio,
+          platform: const LocalPlatform(),
+        ),
         stdio: mockStdio,
         timeoutConfiguration: const TimeoutConfiguration(),
       ),
@@ -306,13 +333,33 @@ void main() {
       });
     }, overrides: <Type, Generator>{
       Logger: () => StdoutLogger(
-        outputPreferences: outputPreferences,
-        terminal: AnsiTerminal(stdio: mockStdio, platform: const LocalPlatform()),
+        outputPreferences: globals.outputPreferences,
+        terminal: AnsiTerminal(
+          stdio: mockStdio,
+          platform: const LocalPlatform(),
+        ),
         stdio: mockStdio,
         timeoutConfiguration: const TimeoutConfiguration(),
       ),
+    });
+
+    testUsingContext('returns correct FlutterVersion', () {
+      FakeAsync().run((FakeAsync time) async {
+        final MockPeer mockPeer = MockPeer();
+        VMService(mockPeer, null, null, null, null, null, MockDevice(), null);
+
+        expect(mockPeer.registeredMethods, contains('flutterVersion'));
+        expect(await mockPeer.sendRequest('flutterVersion'), equals(mockVersion.toJson()));
+      });
+    }, overrides: <Type, Generator>{
+      FlutterVersion: () => mockVersion,
     });
   });
 }
 
 class MockDevice extends Mock implements Device {}
+
+class MockFlutterVersion extends Mock implements FlutterVersion {
+  @override
+  Map<String, Object> toJson() => const <String, Object>{'Mock': 'Version'};
+}

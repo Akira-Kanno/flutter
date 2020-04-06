@@ -87,6 +87,7 @@ class RenderSliverFillRemainingWithScrollable extends RenderSliverSingleBoxAdapt
 
   @override
   void performLayout() {
+    final SliverConstraints constraints = this.constraints;
     // TODO(Piinks): This may fill too much space for NestedScrollView, https://github.com/flutter/flutter/issues/46028
     final double extent = constraints.remainingPaintExtent - math.min(constraints.overlap, 0.0);
 
@@ -137,6 +138,7 @@ class RenderSliverFillRemaining extends RenderSliverSingleBoxAdapter {
 
   @override
   void performLayout() {
+    final SliverConstraints constraints = this.constraints;
     // The remaining space in the viewportMainAxisExtent. Can be <= 0 if we have
     // scrolled beyond the extent of the screen.
     double extent = constraints.viewportMainAxisExtent - constraints.precedingScrollExtent;
@@ -163,9 +165,9 @@ class RenderSliverFillRemaining extends RenderSliverSingleBoxAdapter {
     }
 
     assert(extent.isFinite,
-      'The calculated extent for the child of SliverFillRemaining is not finite.'
-      'This can happen if the child is a scrollable, in which case, the'
-      'hasScrollBody property of SliverFillRemaining should not be set to'
+      'The calculated extent for the child of SliverFillRemaining is not finite. '
+      'This can happen if the child is a scrollable, in which case, the '
+      'hasScrollBody property of SliverFillRemaining should not be set to '
       'false.',
     );
     final double paintedChildSize = calculatePaintOffset(constraints, from: 0.0, to: extent);
@@ -209,6 +211,7 @@ class RenderSliverFillRemainingAndOverscroll extends RenderSliverSingleBoxAdapte
 
   @override
   void performLayout() {
+    final SliverConstraints constraints = this.constraints;
     // The remaining space in the viewportMainAxisExtent. Can be <= 0 if we have
     // scrolled beyond the extent of the screen.
     double extent = constraints.viewportMainAxisExtent - constraints.precedingScrollExtent;
@@ -239,9 +242,9 @@ class RenderSliverFillRemainingAndOverscroll extends RenderSliverSingleBoxAdapte
     }
 
     assert(extent.isFinite,
-      'The calculated extent for the child of SliverFillRemaining is not finite.'
-      'This can happen if the child is a scrollable, in which case, the'
-      'hasScrollBody property of SliverFillRemaining should not be set to'
+      'The calculated extent for the child of SliverFillRemaining is not finite. '
+      'This can happen if the child is a scrollable, in which case, the '
+      'hasScrollBody property of SliverFillRemaining should not be set to '
       'false.',
     );
     final double paintedChildSize = calculatePaintOffset(constraints, from: 0.0, to: extent);

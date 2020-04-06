@@ -105,14 +105,14 @@ void main() {
     );
 
     final dynamic exception = tester.takeException();
-    expect(exception, isInstanceOf<FlutterError>());
+    expect(exception, isFlutterError);
     expect(exception.diagnostics.first.level, DiagnosticLevel.summary);
     expect(exception.diagnostics.first.toString(), startsWith('A RenderFlex overflowed by '));
     await expectLater(
       find.byKey(key),
       matchesGoldenFile('physical_model_overflow.png'),
     );
-  }, skip: isBrowser);
+  });
 
   group('PhysicalModelLayer checks elevation', () {
     Future<void> _testStackChildren(
@@ -277,7 +277,7 @@ void main() {
 
       await _testStackChildren(tester, children, expectedErrorCount: 0);
       expect(find.byType(Material), findsNWidgets(2));
-    }, skip: isBrowser);
+    }, skip: isBrowser);  // https://github.com/flutter/flutter/issues/52855
 
     // Tests:
     //
@@ -484,7 +484,7 @@ void main() {
 
       await _testStackChildren(tester, children, expectedErrorCount: 0);
       expect(find.byType(Material), findsNWidgets(2));
-    }, skip: isBrowser);
+    }, skip: isBrowser);  // https://github.com/flutter/flutter/issues/52855
 
     // Tests:
     //

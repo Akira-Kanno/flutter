@@ -44,6 +44,9 @@ Future<void> run(List<String> arguments) async {
     exitWithError(<String>['The analyze.dart script must be run with --enable-asserts.']);
   }
 
+  print('$clock runtimeType in toString...');
+  await verifyNoRuntimeTypeInToString(flutterRoot);
+
   print('$clock Unexpected binaries...');
   await verifyNoBinaries(flutterRoot);
 
@@ -222,7 +225,7 @@ String _generateLicense(String prefix) {
 Future<void> verifyNoMissingLicense(String workingDirectory, { bool checkMinimums = true }) async {
   final int overrideMinimumMatches = checkMinimums ? null : 0;
   await _verifyNoMissingLicenseForExtension(workingDirectory, 'dart', overrideMinimumMatches ?? 2000, _generateLicense('// '));
-  await _verifyNoMissingLicenseForExtension(workingDirectory, 'java', overrideMinimumMatches ?? 40, _generateLicense('// '));
+  await _verifyNoMissingLicenseForExtension(workingDirectory, 'java', overrideMinimumMatches ?? 39, _generateLicense('// '));
   await _verifyNoMissingLicenseForExtension(workingDirectory, 'h', overrideMinimumMatches ?? 30, _generateLicense('// '));
   await _verifyNoMissingLicenseForExtension(workingDirectory, 'm', overrideMinimumMatches ?? 30, _generateLicense('// '));
   await _verifyNoMissingLicenseForExtension(workingDirectory, 'swift', overrideMinimumMatches ?? 10, _generateLicense('// '));
@@ -317,7 +320,7 @@ Future<void> verifyNoTestPackageImports(String workingDirectory) async {
             name.startsWith('packages/flutter/test/engine/') ||
             name.startsWith('examples/layers/test/smoketests/raw/') ||
             name.startsWith('examples/layers/test/smoketests/rendering/') ||
-            name.startsWith('examples/flutter_gallery/test/calculator')) {
+            name.startsWith('dev/integration_tests/flutter_gallery/test/calculator')) {
           // We only exempt driver tests, some of our special trivial tests.
           // Driver tests aren't typically expected to use TypeMatcher and company.
           // The trivial tests don't typically do anything at all and it would be
@@ -327,7 +330,7 @@ Future<void> verifyNoTestPackageImports(String workingDirectory) async {
           assert(count > 0);
           if (count == 1)
             return null;
-          return '  $name: uses \'package:test\' $count times.';
+          return "  $name: uses 'package:test' $count times.";
         }
         if (name.startsWith('packages/flutter_test/')) {
           // flutter_test has deep ties to package:test
@@ -338,7 +341,7 @@ Future<void> verifyNoTestPackageImports(String workingDirectory) async {
           if (count == 1)
             return null;
         }
-        return '  $name: uses \'package:test\' directly';
+        return "  $name: uses 'package:test' directly";
       }
       return null;
     })
@@ -351,11 +354,11 @@ Future<void> verifyNoTestPackageImports(String workingDirectory) async {
     final String s1 = errors.length == 1 ? 's' : '';
     final String s2 = errors.length == 1 ? '' : 's';
     exitWithError(<String>[
-      '${bold}The following file$s2 use$s1 \'package:test\' incorrectly:$reset',
+      "${bold}The following file$s2 use$s1 'package:test' incorrectly:$reset",
       ...errors,
-      'Rather than depending on \'package:test\' directly, use one of the shims:',
+      "Rather than depending on 'package:test' directly, use one of the shims:",
       ...shims,
-      'This insulates us from breaking changes in \'package:test\'.'
+      "This insulates us from breaking changes in 'package:test'."
     ]);
   }
 }
@@ -541,6 +544,58 @@ Future<void> verifyInternationalizations() async {
   }
 }
 
+Future<void> verifyNoRuntimeTypeInToString(String workingDirectory) async {
+  final String flutterLib = path.join(workingDirectory, 'packages', 'flutter', 'lib');
+  final Set<String> excludedFiles = <String>{
+    path.join(flutterLib, 'src', 'foundation', 'object.dart'), // Calls this from within an assert.
+  };
+  final List<File> files = _allFiles(flutterLib, 'dart', minimumMatches: 400)
+      .where((File file) => !excludedFiles.contains(file.path))
+      .toList();
+  final RegExp toStringRegExp = RegExp(r'^\s+String\s+to(.+?)?String(.+?)?\(\)\s+(\{|=>)');
+  final List<String> problems = <String>[];
+  for (final File file in files) {
+    final List<String> lines = file.readAsLinesSync();
+    for (int index = 0; index < lines.length; index++) {
+      if (toStringRegExp.hasMatch(lines[index])) {
+        final int sourceLine = index + 1;
+        bool _checkForRuntimeType(String line) {
+          if (line.contains(r'$runtimeType') || line.contains('runtimeType.toString()')) {
+            problems.add('${file.path}:$sourceLine}: toString calls runtimeType.toString');
+            return true;
+          }
+          return false;
+        }
+        if (_checkForRuntimeType(lines[index])) {
+          continue;
+        }
+        if (lines[index].contains('=>')) {
+          while (!lines[index].contains(';')) {
+            index++;
+            assert(index < lines.length, 'Source file $file has unterminated toString method.');
+            if (_checkForRuntimeType(lines[index])) {
+              break;
+            }
+          }
+        } else {
+          int openBraceCount = '{'.allMatches(lines[index]).length - '}'.allMatches(lines[index]).length;
+          while (!lines[index].contains('}') && openBraceCount > 0) {
+            index++;
+            assert(index < lines.length, 'Source file $file has unbalanced braces in a toString method.');
+            if (_checkForRuntimeType(lines[index])) {
+              break;
+            }
+            openBraceCount += '{'.allMatches(lines[index]).length;
+            openBraceCount -= '}'.allMatches(lines[index]).length;
+          }
+        }
+      }
+    }
+  }
+  if (problems.isNotEmpty)
+    exitWithError(problems);
+}
+
 Future<void> verifyNoTrailingSpaces(String workingDirectory, { int minimumMatches = 4000 }) async {
   final List<File> files = _allFiles(workingDirectory, null, minimumMatches: minimumMatches)
     .where((File file) => path.basename(file.path) != 'serviceaccount.enc')
@@ -548,6 +603,7 @@ Future<void> verifyNoTrailingSpaces(String workingDirectory, { int minimumMatche
     .where((File file) => path.extension(file.path) != '.snapshot')
     .where((File file) => path.extension(file.path) != '.png')
     .where((File file) => path.extension(file.path) != '.jpg')
+    .where((File file) => path.extension(file.path) != '.ico')
     .where((File file) => path.extension(file.path) != '.jar')
     .toList();
   final List<String> problems = <String>[];
@@ -630,7 +686,9 @@ class Hash256 {
 
 // DO NOT ADD ANY ENTRIES TO THIS LIST.
 // We have a policy of not checking in binaries into this repository.
-// If you have binaries to add, please consult Hixie for advice.
+// If you are adding/changing template images, use the flutter_template_images
+// package and a .img.tmpl placeholder instead.
+// If you have other binaries to add, please consult Hixie for advice.
 final Set<Hash256> _grandfatheredBinaries = <Hash256>{
   // DEFAULT ICON IMAGES
 
@@ -761,138 +819,149 @@ final Set<Hash256> _grandfatheredBinaries = <Hash256>{
   // (also used by a few examples)
   Hash256(0xD29D4E0AF9256DC9, 0x2D0A8F8810608A5E, 0x64A132AD8B397CA2, 0xC4DDC0B1C26A68C3),
 
+  // packages/flutter_tools/templates/app/web/icons/Icon-192.png.copy.tmpl
+  // dev/integration_tests/flutter_gallery/web/icons/Icon-192.png
+  Hash256(0x3DCE99077602F704, 0x21C1C6B2A240BC9B, 0x83D64D86681D45F2, 0x154143310C980BE3),
+
+  // packages/flutter_tools/templates/app/web/icons/Icon-512.png.copy.tmpl
+  // dev/integration_tests/flutter_gallery/web/icons/Icon-512.png
+  Hash256(0xBACCB205AE45f0B4, 0x21BE1657259B4943, 0xAC40C95094AB877F, 0x3BCBE12CD544DCBE),
+
+  // packages/flutter_tools/templates/app/web/favicon.png.copy.tmpl
+  // dev/integration_tests/flutter_gallery/web/favicon.png
+  Hash256(0x7AB2525F4B86B65D, 0x3E4C70358A17E5A1, 0xAAF6F437f99CBCC0, 0x46DAD73d59BB9015),
 
   // GALLERY ICONS
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-hdpi/ic_background.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-hdpi/ic_background.png
   Hash256(0x03CFDE53C249475C, 0x277E8B8E90AC8A13, 0xE5FC13C358A94CCB, 0x67CA866C9862A0DD),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-hdpi/ic_foreground.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-hdpi/ic_foreground.png
   Hash256(0x86A83E23A505EFCC, 0x39C358B699EDE12F, 0xC088EE516A1D0C73, 0xF3B5D74DDAD164B1),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
   Hash256(0xD813B1A77320355E, 0xB68C485CD47D0F0F, 0x3C7E1910DCD46F08, 0x60A6401B8DC13647),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-xhdpi/ic_background.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-xhdpi/ic_background.png
   Hash256(0x35AFA76BD5D6053F, 0xEE927436C78A8794, 0xA8BA5F5D9FC9653B, 0xE5B96567BB7215ED),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-xhdpi/ic_foreground.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-xhdpi/ic_foreground.png
   Hash256(0x263CE9B4F1F69B43, 0xEBB08AE9FE8F80E7, 0x95647A59EF2C040B, 0xA8AEB246861A7DFF),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
   Hash256(0x5E1A93C3653BAAFF, 0x1AAC6BCEB8DCBC2F, 0x2AE7D68ECB07E507, 0xCB1FA8354B28313A),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-xxhdpi/ic_background.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-xxhdpi/ic_background.png
   Hash256(0xA5C77499151DDEC6, 0xDB40D0AC7321FD74, 0x0646C0C0F786743F, 0x8F3C3C408CAC5E8C),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-xxhdpi/ic_foreground.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-xxhdpi/ic_foreground.png
   Hash256(0x33DE450980A2A16B, 0x1982AC7CDC1E7B01, 0x919E07E0289C2139, 0x65F85BCED8895FEF),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
   Hash256(0xC3B8577F4A89BA03, 0x830944FB06C3566B, 0x4C99140A2CA52958, 0x089BFDC3079C59B7),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-xxxhdpi/ic_background.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-xxxhdpi/ic_background.png
   Hash256(0xDEBC241D6F9C5767, 0x8980FDD46FA7ED0C, 0x5B8ACD26BCC5E1BC, 0x473C89B432D467AD),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-xxxhdpi/ic_foreground.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-xxxhdpi/ic_foreground.png
   Hash256(0xBEFE5F7E82BF8B64, 0x148D869E3742004B, 0xF821A9F5A1BCDC00, 0x357D246DCC659DC2),
 
-  // examples/flutter_gallery/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+  // dev/integration_tests/flutter_gallery/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
   Hash256(0xC385404341FF9EDD, 0x30FBE76F0EC99155, 0x8EA4F4AFE8CC0C60, 0x1CA3EDEF177E1DA8),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-1024.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-1024.png
   Hash256(0x6BE5751A29F57A80, 0x36A4B31CC542C749, 0x984E49B22BD65CAA, 0x75AE8B2440848719),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-120.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-120.png
   Hash256(0x9972A2264BFA8F8D, 0x964AFE799EADC1FA, 0x2247FB31097F994A, 0x1495DC32DF071793),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-152.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-152.png
   Hash256(0x4C7CC9B09BEEDA24, 0x45F57D6967753910, 0x57D68E1A6B883D2C, 0x8C52701A74F1400F),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-167.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-167.png
   Hash256(0x66DACAC1CFE4D349, 0xDBE994CB9125FFD7, 0x2D795CFC9CF9F739, 0xEDBB06CE25082E9C),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-180.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-180.png
   Hash256(0x5188621015EBC327, 0xC9EF63AD76E60ECE, 0xE82BDC3E4ABF09E2, 0xEE0139FA7C0A2BE5),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-20.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-20.png
   Hash256(0x27D2752D04EE9A6B, 0x78410E208F74A6CD, 0xC90D9E03B73B8C60, 0xD05F7D623E790487),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-29.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-29.png
   Hash256(0xBB20556B2826CF85, 0xD5BAC73AA69C2AC3, 0x8E71DAD64F15B855, 0xB30CB73E0AF89307),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-40.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-40.png
   Hash256(0x623820FA45CDB0AC, 0x808403E34AD6A53E, 0xA3E9FDAE83EE0931, 0xB020A3A4EF2CDDE7),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-58.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-58.png
   Hash256(0xC6D631D1E107215E, 0xD4A58FEC5F3AA4B5, 0x0AE9724E07114C0C, 0x453E5D87C2CAD3B3),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-60.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-60.png
   Hash256(0x4B6F58D1EB8723C6, 0xE717A0D09FEC8806, 0x90C6D1EF4F71836E, 0x618672827979B1A2),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-76.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-76.png
   Hash256(0x0A1744CC7634D508, 0xE85DD793331F0C8A, 0x0B7C6DDFE0975D8F, 0x29E91C905BBB1BED),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-80.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-80.png
   Hash256(0x24032FBD1E6519D6, 0x0BA93C0D5C189554, 0xF50EAE23756518A2, 0x3FABACF4BD5DAF08),
 
-  // examples/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-87.png
+  // dev/integration_tests/flutter_gallery/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-87.png
   Hash256(0xC17BAE6DF6BB234A, 0xE0AF4BEB0B805F12, 0x14E74EB7AA9A30F1, 0x5763689165DA7DDF),
 
 
   // STOCKS ICONS
 
-  // examples/stocks/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+  // dev/benchmarks/test_apps/stocks/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
   Hash256(0x74052AB5241D4418, 0x7085180608BC3114, 0xD12493C50CD8BBC7, 0x56DED186C37ACE84),
 
-  // examples/stocks/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+  // dev/benchmarks/test_apps/stocks/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
   Hash256(0xE37947332E3491CB, 0x82920EE86A086FEA, 0xE1E0A70B3700A7DA, 0xDCAFBDD8F40E2E19),
 
-  // examples/stocks/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+  // dev/benchmarks/test_apps/stocks/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
   Hash256(0xE608CDFC0C8579FB, 0xE38873BAAF7BC944, 0x9C9D2EE3685A4FAE, 0x671EF0C8BC41D17C),
 
-  // examples/stocks/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+  // dev/benchmarks/test_apps/stocks/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
   Hash256(0xBD53D86977DF9C54, 0xF605743C5ABA114C, 0x9D51D1A8BB917E1A, 0x14CAA26C335CAEBD),
 
-  // examples/stocks/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+  // dev/benchmarks/test_apps/stocks/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
   Hash256(0x64E4D02262C4F3D0, 0xBB4FDC21CD0A816C, 0x4CD2A0194E00FB0F, 0x1C3AE4142FAC0D15),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-60@2x.png
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small-40@3x.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-60@2x.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small-40@3x.png
   Hash256(0x5BA3283A76918FC0, 0xEE127D0F22D7A0B6, 0xDF03DAED61669427, 0x93D89DDD87A08117),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-60@3x.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-60@3x.png
   Hash256(0xCD7F26ED31DEA42A, 0x535D155EC6261499, 0x34E6738255FDB2C4, 0xBD8D4BDDE9A99B05),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-76.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-76.png
   Hash256(0x3FA1225FC9A96A7E, 0xCD071BC42881AB0E, 0x7747EB72FFB72459, 0xA37971BBAD27EE24),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-76@2x.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-76@2x.png
   Hash256(0xCD867001ACD7BBDB, 0x25CDFD452AE89FA2, 0x8C2DC980CAF55F48, 0x0B16C246CFB389BC),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-83.5@2x.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-83.5@2x.png
   Hash256(0x848E9736E5C4915A, 0x7945BCF6B32FD56B, 0x1F1E7CDDD914352E, 0xC9681D38EF2A70DA),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Notification.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Notification.png
   Hash256(0x654BA7D6C4E05CA0, 0x7799878884EF8F11, 0xA383E1F24CEF5568, 0x3C47604A966983C8),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Notification@2x.png
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small-40.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Notification@2x.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small-40.png
   Hash256(0x743056FE7D83FE42, 0xA2990825B6AD0415, 0x1AF73D0D43B227AA, 0x07EBEA9B767381D9),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Notification@3x.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Notification@3x.png
   Hash256(0xA7E1570812D119CF, 0xEF4B602EF28DD0A4, 0x100D066E66F5B9B9, 0x881765DC9303343B),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small-40@2x.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small-40@2x.png
   Hash256(0xB4102839A1E41671, 0x62DACBDEFA471953, 0xB1EE89A0AB7594BE, 0x1D9AC1E67DC2B2CE),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small.png
   Hash256(0x70AC6571B593A967, 0xF1CBAEC9BC02D02D, 0x93AD766D8290ADE6, 0x840139BF9F219019),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small@2x.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small@2x.png
   Hash256(0x5D87A78386DA2C43, 0xDDA8FEF2CA51438C, 0xE5A276FE28C6CF0A, 0xEBE89085B56665B6),
 
-  // examples/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small@3x.png
+  // dev/benchmarks/test_apps/stocks/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-Small@3x.png
   Hash256(0x4D9F5E81F668DA44, 0xB20A77F8BF7BA2E1, 0xF384533B5AD58F07, 0xB3A2F93F8635CD96),
 
 
@@ -957,18 +1026,6 @@ final Set<Hash256> _grandfatheredBinaries = <Hash256>{
   Hash256(0x4C67221E25626CB2, 0x3F94E1F49D34E4CF, 0x3A9787A514924FC5, 0x9EF1E143E5BC5690),
 
 
-  // HISTORICAL DEVICE LAB IMAGES
-
-  // dev/devicelab/images/agent-statuses.png
-  Hash256(0x0A43016C84095771, 0x1C610E1C01B1C3B2, 0x681DA0B2062C02AA, 0x31CC7FB3FDC298FD),
-
-  // dev/devicelab/images/broken-test.png
-  Hash256(0x319459F42967A888, 0x90B20063544D6707, 0x849E1E3447CC56A5, 0xE226C47DE34F13AD),
-
-  // dev/devicelab/images/legend.png
-  Hash256(0x92A98975AF5F076C, 0xE7BFAB86B0DD7A3D, 0xC45287B706D10456, 0x4E512BA3C41B2749),
-
-
   // MISCELLANEOUS
 
   // dev/bots/serviceaccount.enc
@@ -990,11 +1047,13 @@ final Set<Hash256> _grandfatheredBinaries = <Hash256>{
 Future<void> verifyNoBinaries(String workingDirectory, { Set<Hash256> grandfatheredBinaries }) async {
   // Please do not add anything to the _grandfatheredBinaries set above.
   // We have a policy of not checking in binaries into this repository.
-  // If you have binaries to add, please consult Hixie for advice.
+  // If you are adding/changing template images, use the flutter_template_images
+  // package and a .img.tmpl placeholder instead.
+  // If you have other binaries to add, please consult Hixie for advice.
   assert(
     _grandfatheredBinaries
       .expand<int>((Hash256 hash) => <int>[hash.a, hash.b, hash.c, hash.d])
-      .reduce((int value, int element) => value ^ element) == 0x39A050CD69434936 // Please do not modify this line.
+      .reduce((int value, int element) => value ^ element) == 0x606B51C908B40BFA // Please do not modify this line.
   );
   grandfatheredBinaries ??= _grandfatheredBinaries;
   if (!Platform.isWindows) { // TODO(ianh): Port this to Windows

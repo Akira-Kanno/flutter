@@ -14,6 +14,7 @@ import '../build_system.dart';
 import '../depfile.dart';
 import '../exceptions.dart';
 import 'assets.dart';
+import 'icon_tree_shaker.dart';
 
 /// The define to pass a [BuildMode].
 const String kBuildMode= 'BuildMode';
@@ -40,6 +41,9 @@ const String kExtraFrontEndOptions = 'ExtraFrontEndOptions';
 /// This is expected to be a comma separated list of strings.
 const String kExtraGenSnapshotOptions = 'ExtraGenSnapshotOptions';
 
+/// Whether to strip source code information out of release builds and where to save it.
+const String kSplitDebugInfo = 'SplitDebugInfo';
+
 /// Alternative scheme for file URIs.
 ///
 /// May be used along with [kFileSystemRoots] to support a multi-root
@@ -62,6 +66,9 @@ const String kDartDefines = 'DartDefines';
 /// The other supported value is armv7, the 32-bit iOS architecture.
 const String kIosArchs = 'IosArchs';
 
+/// Whether to enable Dart obfuscation and where to save the symbol map.
+const String kDartObfuscation = 'DartObfuscation';
+
 /// Copies the pre-built flutter bundle.
 // This is a one-off rule for implementing build bundle in terms of assemble.
 class CopyFlutterBundle extends Target {
@@ -75,6 +82,7 @@ class CopyFlutterBundle extends Target {
     Source.artifact(Artifact.vmSnapshotData, mode: BuildMode.debug),
     Source.artifact(Artifact.isolateSnapshotData, mode: BuildMode.debug),
     Source.pattern('{BUILD_DIR}/app.dill'),
+    ...IconTreeShaker.inputs,
   ];
 
   @override
@@ -109,7 +117,15 @@ class CopyFlutterBundle extends Target {
           .copySync(environment.outputDir.childFile('isolate_snapshot_data').path);
     }
     final Depfile assetDepfile = await copyAssets(environment, environment.outputDir);
-    assetDepfile.writeToFile(environment.buildDir.childFile('flutter_assets.d'));
+    final DepfileService depfileService = DepfileService(
+      fileSystem: globals.fs,
+      logger: globals.logger,
+      platform: globals.platform,
+    );
+    depfileService.writeToFile(
+      assetDepfile,
+      environment.buildDir.childFile('flutter_assets.d'),
+    );
   }
 
   @override
@@ -188,9 +204,10 @@ class KernelSnapshot extends Target {
     final TargetPlatform targetPlatform = getTargetPlatformForName(environment.defines[kTargetPlatform]);
 
     // This configuration is all optional.
-    final List<String> extraFrontEndOptions = <String>[
-      ...?environment.defines[kExtraFrontEndOptions]?.split(',')
-    ];
+    final String rawFrontEndOption = environment.defines[kExtraFrontEndOptions];
+    final List<String> extraFrontEndOptions = (rawFrontEndOption?.isNotEmpty ?? false)
+      ? rawFrontEndOption?.split(',')
+      : null;
     final List<String> fileSystemRoots = environment.defines[kFileSystemRoots]?.split(',');
     final String fileSystemScheme = environment.defines[kFileSystemScheme];
 
@@ -244,8 +261,18 @@ abstract class AotElfBase extends Target {
   const AotElfBase();
 
   @override
+  String get analyticsName => 'android_aot';
+
+  @override
   Future<void> build(Environment environment) async {
-    final AOTSnapshotter snapshotter = AOTSnapshotter(reportTimings: false);
+    final AOTSnapshotter snapshotter = AOTSnapshotter(
+      reportTimings: false,
+      fileSystem: globals.fs,
+      logger: globals.logger,
+      xcode: globals.xcode,
+      processManager: globals.processManager,
+      artifacts: globals.artifacts,
+    );
     final String outputPath = environment.buildDir.path;
     if (environment.defines[kBuildMode] == null) {
       throw MissingDefineException(kBuildMode, 'aot_elf');
@@ -257,6 +284,8 @@ abstract class AotElfBase extends Target {
       ?? const <String>[];
     final BuildMode buildMode = getBuildModeForName(environment.defines[kBuildMode]);
     final TargetPlatform targetPlatform = getTargetPlatformForName(environment.defines[kTargetPlatform]);
+    final String splitDebugInfo = environment.defines[kSplitDebugInfo];
+    final bool dartObfuscation = environment.defines[kDartObfuscation] == 'true';
     final int snapshotExitCode = await snapshotter.build(
       platform: targetPlatform,
       buildMode: buildMode,
@@ -265,6 +294,8 @@ abstract class AotElfBase extends Target {
       outputPath: outputPath,
       bitcode: false,
       extraGenSnapshotOptions: extraGenSnapshotOptions,
+      splitDebugInfo: splitDebugInfo,
+      dartObfuscation: dartObfuscation,
     );
     if (snapshotExitCode != 0) {
       throw Exception('AOT snapshotter exited with code $snapshotExitCode');
@@ -359,35 +390,9 @@ abstract class CopyFlutterAotBundle extends Target {
   }
 }
 
-// This is a one-off rule for implementing build aot in terms of assemble.
-class ProfileCopyFlutterAotBundle extends CopyFlutterAotBundle {
-  const ProfileCopyFlutterAotBundle();
-
-  @override
-  String get name => 'profile_android_flutter_bundle';
-
-  @override
-  List<Target> get dependencies => const <Target>[
-    AotElfProfile(),
-  ];
-}
-
-// This is a one-off rule for implementing build aot in terms of assemble.
-class ReleaseCopyFlutterAotBundle extends CopyFlutterAotBundle {
-  const ReleaseCopyFlutterAotBundle();
-
-  @override
-  String get name => 'release_android_flutter_bundle';
-
-  @override
-  List<Target> get dependencies => const <Target>[
-    AotElfRelease(),
-  ];
-}
-
 /// Dart defines are encoded inside [Environment] as a JSON array.
 List<String> parseDartDefines(Environment environment) {
-  if (!environment.defines.containsKey(kDartDefines)) {
+  if (!environment.defines.containsKey(kDartDefines) || environment.defines[kDartDefines].isEmpty) {
     return const <String>[];
   }
 
@@ -395,7 +400,7 @@ List<String> parseDartDefines(Environment environment) {
   try {
     final List<Object> parsedDefines = jsonDecode(dartDefinesJson) as List<Object>;
     return parsedDefines.cast<String>();
-  } on FormatException catch (_) {
+  } on FormatException {
     throw Exception(
       'The value of -D$kDartDefines is not formatted correctly.\n'
       'The value must be a JSON-encoded list of strings but was:\n'

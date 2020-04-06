@@ -90,6 +90,10 @@ class _TableElementRow {
 ///
 /// For more details about the table layout algorithm, see [RenderTable].
 /// To control the alignment of children, see [TableCell].
+///
+/// See also:
+///
+///  * The [catalog of layout widgets](https://flutter.dev/widgets/layout/).
 class Table extends RenderObjectWidget {
   /// Creates a table.
   ///
@@ -266,7 +270,7 @@ class _TableElement extends RenderObjectElement {
   }
 
   @override
-  void insertChildRenderObject(RenderObject child, Element slot) {
+  void insertChildRenderObject(RenderObject child, IndexedSlot<Element> slot) {
     renderObject.setupParentData(child);
   }
 
@@ -344,6 +348,7 @@ class _TableElement extends RenderObjectElement {
   @override
   bool forgetChild(Element child) {
     _forgottenChildren.add(child);
+    super.forgetChild(child);
     return true;
   }
 }
@@ -354,7 +359,7 @@ class _TableElement extends RenderObjectElement {
 /// the [TableCell] widget to its enclosing [Table] must contain only
 /// [TableRow]s, [StatelessWidget]s, or [StatefulWidget]s (not
 /// other kinds of widgets, like [RenderObjectWidget]s).
-class TableCell extends ParentDataWidget<Table> {
+class TableCell extends ParentDataWidget<TableCellParentData> {
   /// Creates a widget that controls how a child of a [Table] is aligned.
   const TableCell({
     Key key,
@@ -375,6 +380,9 @@ class TableCell extends ParentDataWidget<Table> {
         targetParent.markNeedsLayout();
     }
   }
+
+  @override
+  Type get debugTypicalAncestorWidgetClass => Table;
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {

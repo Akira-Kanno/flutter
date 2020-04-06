@@ -40,6 +40,7 @@ class DecorationImage {
   /// must not be null.
   const DecorationImage({
     @required this.image,
+    this.onError,
     this.colorFilter,
     this.fit,
     this.alignment = Alignment.center,
@@ -56,6 +57,9 @@ class DecorationImage {
   /// Typically this will be an [AssetImage] (for an image shipped with the
   /// application) or a [NetworkImage] (for an image obtained from the network).
   final ImageProvider image;
+
+  /// An optional error callback for errors emitted when loading [image].
+  final ImageErrorListener onError;
 
   /// A color filter to apply to the image before painting it.
   final ColorFilter colorFilter;
@@ -172,7 +176,7 @@ class DecorationImage {
       if (matchTextDirection)
         'match text direction',
     ];
-    return '$runtimeType(${properties.join(", ")})';
+    return '${objectRuntimeType(this, 'DecorationImage')}(${properties.join(", ")})';
   }
 }
 
@@ -239,7 +243,10 @@ class DecorationImagePainter {
 
     final ImageStream newImageStream = _details.image.resolve(configuration);
     if (newImageStream.key != _imageStream?.key) {
-      final ImageStreamListener listener = ImageStreamListener(_handleImage);
+      final ImageStreamListener listener = ImageStreamListener(
+        _handleImage,
+        onError: _details.onError,
+      );
       _imageStream?.removeListener(listener);
       _imageStream = newImageStream;
       _imageStream.addListener(listener);
@@ -286,12 +293,15 @@ class DecorationImagePainter {
   /// After this method has been called, the object is no longer usable.
   @mustCallSuper
   void dispose() {
-    _imageStream?.removeListener(ImageStreamListener(_handleImage));
+    _imageStream?.removeListener(ImageStreamListener(
+      _handleImage,
+      onError: _details.onError,
+    ));
   }
 
   @override
   String toString() {
-    return '$runtimeType(stream: $_imageStream, image: $_image) for $_details';
+    return '${objectRuntimeType(this, 'DecorationImagePainter')}(stream: $_imageStream, image: $_image) for $_details';
   }
 }
 

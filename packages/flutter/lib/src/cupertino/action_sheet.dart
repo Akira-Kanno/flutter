@@ -85,7 +85,8 @@ const double _kDividerThickness = 1.0;
 /// sheet title and message text style.
 ///
 /// To display action buttons that look like standard iOS action sheet buttons,
-/// provide [CupertinoActionSheetAction]s for the [actions] given to this action sheet.
+/// provide [CupertinoActionSheetAction]s for the [actions] given to this action
+/// sheet.
 ///
 /// To include a iOS-style cancel button separate from the other buttons,
 /// provide an [CupertinoActionSheetAction] for the [cancelButton] given to this
@@ -469,6 +470,7 @@ class _CupertinoAlertRenderElement extends RenderObjectElement {
     } else if (_actionsElement == child) {
       _actionsElement = null;
     }
+    super.forgetChild(child);
   }
 
   @override
@@ -667,6 +669,7 @@ class _RenderCupertinoAlert extends RenderBox {
 
   @override
   void performLayout() {
+    final BoxConstraints constraints = this.constraints;
     final bool hasDivider = contentSection.getMaxIntrinsicHeight(constraints.maxWidth) > 0.0
         && actionsSection.getMaxIntrinsicHeight(constraints.maxWidth) > 0.0;
     final double dividerThickness = hasDivider ? _dividerThickness : 0.0;
@@ -955,7 +958,7 @@ class _PressableActionButtonState extends State<_PressableActionButton> {
 // _ActionButtonParentData. _ActionButtonParentDataWidget is responsible for
 // updating the pressed state of an _ActionButtonParentData based on the
 // incoming isPressed property.
-class _ActionButtonParentDataWidget extends ParentDataWidget<_CupertinoAlertActionsRenderWidget> {
+class _ActionButtonParentDataWidget extends ParentDataWidget<_ActionButtonParentData> {
   const _ActionButtonParentDataWidget({
     Key key,
     this.isPressed,
@@ -977,6 +980,9 @@ class _ActionButtonParentDataWidget extends ParentDataWidget<_CupertinoAlertActi
         targetParent.markNeedsPaint();
     }
   }
+
+  @override
+  Type get debugTypicalAncestorWidgetClass => _CupertinoAlertActionsRenderWidget;
 }
 
 // ParentData applied to individual action buttons that report whether or not

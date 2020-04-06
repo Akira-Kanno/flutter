@@ -30,9 +30,17 @@ TaskFunction createTilesScrollPerfTest() {
   ).run;
 }
 
+TaskFunction createPlatformViewsScrollPerfTest() {
+  return PerfTest(
+    '${flutterDirectory.path}/dev/benchmarks/platform_views_layout',
+    'test_driver/scroll_perf.dart',
+    'platform_views_scroll_perf',
+  ).run;
+}
+
 TaskFunction createHomeScrollPerfTest() {
   return PerfTest(
-    '${flutterDirectory.path}/examples/flutter_gallery',
+    '${flutterDirectory.path}/dev/integration_tests/flutter_gallery',
     'test_driver/scroll_perf.dart',
     'home_scroll_perf',
   ).run;
@@ -81,6 +89,15 @@ TaskFunction createSimpleAnimationPerfTest({bool needsMeasureCpuGpu = false}) {
   ).run;
 }
 
+TaskFunction createAnimatedPlaceholderPerfTest({bool needsMeasureCpuGpu = false}) {
+  return PerfTest(
+    '${flutterDirectory.path}/dev/benchmarks/macrobenchmarks',
+    'test_driver/animated_placeholder_perf.dart',
+    'animated_placeholder_perf',
+    needsMeasureCpuGPu: needsMeasureCpuGpu,
+  ).run;
+}
+
 TaskFunction createPictureCachePerfTest() {
   return PerfTest(
     '${flutterDirectory.path}/dev/benchmarks/macrobenchmarks',
@@ -91,7 +108,7 @@ TaskFunction createPictureCachePerfTest() {
 
 TaskFunction createFlutterGalleryStartupTest() {
   return StartupTest(
-    '${flutterDirectory.path}/examples/flutter_gallery',
+    '${flutterDirectory.path}/dev/integration_tests/flutter_gallery',
   ).run;
 }
 
@@ -109,7 +126,7 @@ TaskFunction createHelloWorldStartupTest() {
 }
 
 TaskFunction createFlutterGalleryCompileTest() {
-  return CompileTest('${flutterDirectory.path}/examples/flutter_gallery').run;
+  return CompileTest('${flutterDirectory.path}/dev/integration_tests/flutter_gallery').run;
 }
 
 TaskFunction createHelloWorldCompileTest() {
@@ -161,6 +178,14 @@ TaskFunction createTextfieldPerfTest() {
     '${flutterDirectory.path}/dev/benchmarks/macrobenchmarks',
     'test_driver/textfield_perf.dart',
     'textfield_perf',
+  ).run;
+}
+
+TaskFunction createColorFilterAndFadePerfTest() {
+  return PerfTest(
+    '${flutterDirectory.path}/dev/benchmarks/macrobenchmarks',
+    'test_driver/color_filter_and_fade_perf.dart',
+    'color_filter_and_fade_perf',
   ).run;
 }
 
@@ -250,12 +275,10 @@ class PerfTest {
       return TaskResult.success(data, benchmarkScoreKeys: <String>[
         'average_frame_build_time_millis',
         'worst_frame_build_time_millis',
-        'missed_frame_build_budget_count',
         '90th_percentile_frame_build_time_millis',
         '99th_percentile_frame_build_time_millis',
         'average_frame_rasterizer_time_millis',
         'worst_frame_rasterizer_time_millis',
-        'missed_frame_rasterizer_budget_count',
         '90th_percentile_frame_rasterizer_time_millis',
         '99th_percentile_frame_rasterizer_time_millis',
         if (needsMeasureCpuGPu) 'cpu_percentage',
@@ -286,7 +309,7 @@ class WebCompileTest {
       await _measureSize('hello_world', output, metrics);
       return null;
     });
-    await inDirectory<TaskResult>('${flutterDirectory.path}/examples/flutter_gallery', () async {
+    await inDirectory<TaskResult>('${flutterDirectory.path}/dev/integration_tests/flutter_gallery', () async {
       await flutter('packages', options: <String>['get']);
       await evalFlutter('build', options: <String>[
         'web',
@@ -296,7 +319,7 @@ class WebCompileTest {
       ], environment: <String, String>{
         'FLUTTER_WEB': 'true',
       });
-      final String output = '${flutterDirectory.path}/examples/flutter_gallery/build/web/main.dart.js';
+      final String output = '${flutterDirectory.path}/dev/integration_tests/flutter_gallery/build/web/main.dart.js';
       await _measureSize('flutter_gallery', output, metrics);
       return null;
     });
@@ -353,48 +376,12 @@ class CompileTest {
       await flutter('packages', options: <String>['get']);
 
       final Map<String, dynamic> metrics = <String, dynamic>{
-        ...await _compileAot(),
         ...await _compileApp(reportPackageContentSizes: reportPackageContentSizes),
         ...await _compileDebug(),
       };
 
       return TaskResult.success(metrics, benchmarkScoreKeys: metrics.keys.toList());
     });
-  }
-
-  static Future<Map<String, dynamic>> _compileAot() async {
-    await flutter('clean');
-    final Stopwatch watch = Stopwatch()..start();
-    final List<String> options = <String>[
-      'aot',
-      '-v',
-      '--extra-gen-snapshot-options=--print_snapshot_sizes',
-      '--release',
-      '--no-pub',
-      '--target-platform',
-    ];
-    switch (deviceOperatingSystem) {
-      case DeviceOperatingSystem.ios:
-        options.add('ios');
-        break;
-      case DeviceOperatingSystem.android:
-        options.add('android-arm');
-        break;
-    }
-    final String compileLog = await evalFlutter('build', options: options);
-    watch.stop();
-
-    final RegExp metricExpression = RegExp(r'([a-zA-Z]+)\(CodeSize\)\: (\d+)');
-    final Map<String, dynamic> metrics = <String, dynamic>{};
-    for (final Match m in metricExpression.allMatches(compileLog)) {
-      metrics[_sdkNameToMetricName(m.group(1))] = int.parse(m.group(2));
-    }
-    if (metrics.length != _kSdkNameToMetricNameMapping.length) {
-      throw 'Expected metrics: ${_kSdkNameToMetricNameMapping.keys}, but got: ${metrics.keys}.';
-    }
-    metrics['aot_snapshot_compile_millis'] = watch.elapsedMilliseconds;
-
-    return metrics;
   }
 
   static Future<Map<String, dynamic>> _compileApp({ bool reportPackageContentSizes = false }) async {
@@ -407,6 +394,8 @@ class CompileTest {
     switch (deviceOperatingSystem) {
       case DeviceOperatingSystem.ios:
         options.insert(0, 'ios');
+        options.add('--tree-shake-icons');
+        options.add('--split-debug-info=infos/');
         watch.start();
         await flutter('build', options: options);
         watch.stop();
@@ -420,6 +409,8 @@ class CompileTest {
       case DeviceOperatingSystem.android:
         options.insert(0, 'apk');
         options.add('--target-platform=android-arm');
+        options.add('--tree-shake-icons');
+        options.add('--split-debug-info=infos/');
         watch.start();
         await flutter('build', options: options);
         watch.stop();
@@ -434,6 +425,8 @@ class CompileTest {
         if (reportPackageContentSizes)
           metrics.addAll(await getSizesFromApk(apkPath));
         break;
+      case DeviceOperatingSystem.fuchsia:
+        throw Exception('Unsupported option for Fuchsia devices');
     }
 
     metrics.addAll(<String, dynamic>{
@@ -456,6 +449,8 @@ class CompileTest {
         options.insert(0, 'apk');
         options.add('--target-platform=android-arm');
         break;
+      case DeviceOperatingSystem.fuchsia:
+        throw Exception('Unsupported option for Fuchsia devices');
     }
     watch.start();
     await flutter('build', options: options);
@@ -464,22 +459,6 @@ class CompileTest {
     return <String, dynamic>{
       'debug_full_compile_millis': watch.elapsedMilliseconds,
     };
-  }
-
-  static const Map<String, String> _kSdkNameToMetricNameMapping = <String, String> {
-    'VMIsolate': 'aot_snapshot_size_vmisolate',
-    'Isolate': 'aot_snapshot_size_isolate',
-    'ReadOnlyData': 'aot_snapshot_size_rodata',
-    'Instructions': 'aot_snapshot_size_instructions',
-    'Total': 'aot_snapshot_size_total',
-  };
-
-  static String _sdkNameToMetricName(String sdkName) {
-
-    if (!_kSdkNameToMetricNameMapping.containsKey(sdkName))
-      throw 'Unrecognized SDK snapshot metric name: $sdkName';
-
-    return _kSdkNameToMetricNameMapping[sdkName];
   }
 
   static Future<Map<String, dynamic>> getSizesFromIosApp(String appPath) async {
@@ -499,7 +478,6 @@ class CompileTest {
       'flutter_framework_uncompressed_bytes': await flutterFramework.length(),
     };
   }
-
 
   static Future<Map<String, dynamic>> getSizesFromApk(String apkPath) async {
     final  String output = await eval('unzip', <String>['-v', apkPath]);
@@ -713,6 +691,7 @@ class ReportedDurationTest {
       print('launching $project$test on device...');
       await flutter('run', options: <String>[
         '--verbose',
+        '--no-fast-start',
         '--${_reportedDurationTestToString(flavor)}',
         '--no-resident',
         '-d', device.deviceId,
@@ -766,7 +745,7 @@ class ListStatistics {
 
 class _UnzipListEntry {
   factory _UnzipListEntry.fromLine(String line) {
-    final List<String> data = line.trim().split(RegExp('\\s+'));
+    final List<String> data = line.trim().split(RegExp(r'\s+'));
     assert(data.length == 8);
     return _UnzipListEntry._(
       uncompressedSize:  int.parse(data[0]),

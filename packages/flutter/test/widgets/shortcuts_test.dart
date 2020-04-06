@@ -132,8 +132,8 @@ void main() {
       final Map<LogicalKeySet, String> map = <LogicalKeySet, String>{set1: 'one'};
       expect(set2 == set3, isTrue);
       expect(set2 == set4, isTrue);
-      expect(set2.hashCode == set3.hashCode, isTrue);
-      expect(set2.hashCode == set4.hashCode, isTrue);
+      expect(set2.hashCode, set3.hashCode);
+      expect(set2.hashCode, set4.hashCode);
       expect(map.containsKey(set1), isTrue);
       expect(map.containsKey(LogicalKeySet(LogicalKeyboardKey.keyA)), isTrue);
       expect(
@@ -146,6 +146,40 @@ void main() {
           })),
       );
     });
+
+    test('LogicalKeySet.hashCode is stable', () {
+      final LogicalKeySet set1 = LogicalKeySet(LogicalKeyboardKey.keyA);
+      expect(set1.hashCode, set1.hashCode);
+
+      final LogicalKeySet set2 = LogicalKeySet(LogicalKeyboardKey.keyA, LogicalKeyboardKey.keyB);
+      expect(set2.hashCode, set2.hashCode);
+
+      final LogicalKeySet set3 = LogicalKeySet(LogicalKeyboardKey.keyA, LogicalKeyboardKey.keyB, LogicalKeyboardKey.keyC);
+      expect(set3.hashCode, set3.hashCode);
+
+      final LogicalKeySet set4 = LogicalKeySet(LogicalKeyboardKey.keyA, LogicalKeyboardKey.keyB, LogicalKeyboardKey.keyC, LogicalKeyboardKey.keyD);
+      expect(set4.hashCode, set4.hashCode);
+    });
+
+    test('LogicalKeySet.hashCode is order-independent', () {
+      expect(
+        LogicalKeySet(LogicalKeyboardKey.keyA).hashCode,
+        LogicalKeySet(LogicalKeyboardKey.keyA).hashCode,
+      );
+      expect(
+        LogicalKeySet(LogicalKeyboardKey.keyA, LogicalKeyboardKey.keyB).hashCode,
+        LogicalKeySet(LogicalKeyboardKey.keyB, LogicalKeyboardKey.keyA).hashCode,
+      );
+      expect(
+        LogicalKeySet(LogicalKeyboardKey.keyA, LogicalKeyboardKey.keyB, LogicalKeyboardKey.keyC).hashCode,
+        LogicalKeySet(LogicalKeyboardKey.keyC, LogicalKeyboardKey.keyB, LogicalKeyboardKey.keyA).hashCode,
+      );
+      expect(
+        LogicalKeySet(LogicalKeyboardKey.keyA, LogicalKeyboardKey.keyB, LogicalKeyboardKey.keyC, LogicalKeyboardKey.keyD).hashCode,
+        LogicalKeySet(LogicalKeyboardKey.keyD, LogicalKeyboardKey.keyC, LogicalKeyboardKey.keyB, LogicalKeyboardKey.keyA).hashCode,
+      );
+    });
+
     test('LogicalKeySet diagnostics work.', () {
       final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
 
@@ -177,7 +211,6 @@ void main() {
             TestAction.key: () => TestAction(
               onInvoke: (FocusNode node, Intent intent) {
                 invoked = true;
-                return true;
               },
             ),
           },
@@ -215,7 +248,6 @@ void main() {
               TestAction.key: () => TestAction(
                 onInvoke: (FocusNode node, Intent intent) {
                   invoked = true;
-                  return true;
                 },
               ),
             },
@@ -254,7 +286,6 @@ void main() {
                 TestAction.key: () => TestAction(
                   onInvoke: (FocusNode node, Intent intent) {
                     invoked = true;
-                    return true;
                   },
                 ),
               },
@@ -324,6 +355,30 @@ void main() {
 
       expect(description.length, equals(1));
       expect(description[0], equals('shortcuts: <Debug Label>'));
+    });
+    test('Shortcuts diagnostics work when manager specified.', () {
+      final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+
+      Shortcuts(
+        manager: ShortcutManager(),
+        shortcuts: <LogicalKeySet, Intent>{
+          LogicalKeySet(
+            LogicalKeyboardKey.keyA,
+            LogicalKeyboardKey.keyB,
+          ): const Intent(ActivateAction.key)
+        },
+      ).debugFillProperties(builder);
+
+      final List<String> description = builder.properties
+          .where((DiagnosticsNode node) {
+        return !node.isFiltered(DiagnosticLevel.info);
+      })
+          .map((DiagnosticsNode node) => node.toString())
+          .toList();
+
+      expect(description.length, equals(2));
+      expect(description[0], equalsIgnoringHashCodes('manager: ShortcutManager#00000(shortcuts: {})'));
+      expect(description[1], equalsIgnoringHashCodes('shortcuts: {{Key A + Key B}: Intent#00000(key: [<ActivateAction>])}'));
     });
   });
 }

@@ -138,14 +138,14 @@ class VMService {
         final bool pause = params.asMap['pause'] as bool ?? false;
 
         if (isolateId.isEmpty) {
-          throw rpc.RpcException.invalidParams('Invalid \'isolateId\': $isolateId');
+          throw rpc.RpcException.invalidParams("Invalid 'isolateId': $isolateId");
         }
         try {
           await reloadSources(isolateId, force: force, pause: pause);
           return <String, String>{'type': 'Success'};
         } on rpc.RpcException {
           rethrow;
-        } catch (e, st) {
+        } on Exception catch (e, st) {
           throw rpc.RpcException(rpc_error_code.SERVER_ERROR,
               'Error during Sources Reload: $e\n$st');
         }
@@ -173,10 +173,10 @@ class VMService {
         final String classId = params['class'].value as String;
 
         if (libraryId.isEmpty) {
-          throw rpc.RpcException.invalidParams('Invalid \'libraryId\': $libraryId');
+          throw rpc.RpcException.invalidParams("Invalid 'libraryId': $libraryId");
         }
         if (classId.isEmpty) {
-          throw rpc.RpcException.invalidParams('Invalid \'classId\': $classId');
+          throw rpc.RpcException.invalidParams("Invalid 'classId': $classId");
         }
 
         globals.printTrace('reloadMethod not yet supported, falling back to hot reload');
@@ -189,7 +189,7 @@ class VMService {
           return <String, String>{'type': 'Success'};
         } on rpc.RpcException {
           rethrow;
-        } catch (e, st) {
+        } on Exception catch (e, st) {
           throw rpc.RpcException(rpc_error_code.SERVER_ERROR,
               'Error during Sources Reload: $e\n$st');
         }
@@ -205,7 +205,7 @@ class VMService {
         final bool pause = params.asMap['pause'] as bool ?? false;
 
         if (pause is! bool) {
-          throw rpc.RpcException.invalidParams('Invalid \'pause\': $pause');
+          throw rpc.RpcException.invalidParams("Invalid 'pause': $pause");
         }
 
         try {
@@ -213,7 +213,7 @@ class VMService {
           return <String, String>{'type': 'Success'};
         } on rpc.RpcException {
           rethrow;
-        } catch (e, st) {
+        } on Exception catch (e, st) {
           throw rpc.RpcException(rpc_error_code.SERVER_ERROR,
               'Error during Hot Restart: $e\n$st');
         }
@@ -226,7 +226,7 @@ class VMService {
     }
 
     _peer.registerMethod('flutterVersion', (rpc.Parameters params) async {
-      final FlutterVersion version = FlutterVersion();
+      final FlutterVersion version = context.get<FlutterVersion>() ?? FlutterVersion();
       final Map<String, Object> versionJson = version.toJson();
       versionJson['frameworkRevisionShort'] = version.frameworkRevisionShort;
       versionJson['engineRevisionShort'] = version.engineRevisionShort;
@@ -243,12 +243,12 @@ class VMService {
         final String isolateId = params['isolateId'].asString;
         if (isolateId is! String || isolateId.isEmpty) {
           throw rpc.RpcException.invalidParams(
-              'Invalid \'isolateId\': $isolateId');
+              "Invalid 'isolateId': $isolateId");
         }
         final String expression = params['expression'].asString;
         if (expression is! String || expression.isEmpty) {
           throw rpc.RpcException.invalidParams(
-              'Invalid \'expression\': $expression');
+              "Invalid 'expression': $expression");
         }
         final List<String> definitions =
             List<String>.from(params['definitions'].asList);
@@ -266,7 +266,7 @@ class VMService {
             'result': <String, dynamic> {'kernelBytes': kernelBytesBase64}};
         } on rpc.RpcException {
           rethrow;
-        } catch (e, st) {
+        } on Exception catch (e, st) {
           throw rpc.RpcException(rpc_error_code.SERVER_ERROR,
               'Error during expression compilation: $e\n$st');
         }
@@ -452,6 +452,8 @@ class VMService {
   Future<void> getVM() async => await vm.reload();
 
   Future<void> refreshViews({ bool waitForViews = false }) => vm.refreshViews(waitForViews: waitForViews);
+
+  Future<void> close() async => await _peer.close();
 }
 
 /// An error that is thrown when constructing/updating a service object.
@@ -623,7 +625,8 @@ abstract class ServiceObject {
           updateFromMap(response);
           completer.complete(this);
         }
-      } catch (e, st) {
+      // Catches all exceptions to propagate to the completer.
+      } catch (e, st) { // ignore: avoid_catches_without_on_clauses
         completer.completeError(e, st);
       }
       _inProgressReload = null;
@@ -1037,14 +1040,12 @@ class VM extends ServiceObjectOwner {
   Future<ServiceMap> runInView(
     String viewId,
     Uri main,
-    Uri packages,
     Uri assetsDirectory,
   ) {
     return invokeRpc<ServiceMap>('_flutter.runInView',
       params: <String, dynamic>{
         'viewId': viewId,
         'mainScript': main.toString(),
-        'packagesFile': packages.toString(),
         'assetDirectory': assetsDirectory.toString(),
     });
   }
@@ -1253,7 +1254,6 @@ class Isolate extends ServiceObjectOwner {
   Future<Map<String, dynamic>> reloadSources({
     bool pause = false,
     Uri rootLibUri,
-    Uri packagesUri,
   }) async {
     try {
       final Map<String, dynamic> arguments = <String, dynamic>{
@@ -1261,9 +1261,6 @@ class Isolate extends ServiceObjectOwner {
       };
       if (rootLibUri != null) {
         arguments['rootLibUri'] = rootLibUri.toString();
-      }
-      if (packagesUri != null) {
-        arguments['packagesUri'] = packagesUri.toString();
       }
       final Map<String, dynamic> response = await invokeRpcRaw('_reloadSources', params: arguments);
       return response;
@@ -1489,7 +1486,6 @@ class FlutterView extends ServiceObject {
   // TODO(johnmccutchan): Report errors when running failed.
   Future<void> runFromSource(
     Uri entryUri,
-    Uri packagesUri,
     Uri assetsDirectoryUri,
   ) async {
     final String viewId = id;
@@ -1508,7 +1504,6 @@ class FlutterView extends ServiceObject {
       });
     await owner.vm.runInView(viewId,
                              entryUri,
-                             packagesUri,
                              assetsDirectoryUri);
     await completer.future;
     await owner.vm.refreshViews(waitForViews: true);

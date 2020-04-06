@@ -262,7 +262,7 @@ abstract class TextSelectionControls {
 /// The selection handles are displayed in the [Overlay] that most closely
 /// encloses the given [BuildContext].
 class TextSelectionOverlay {
-  /// Creates an object that manages overly entries for selection handles.
+  /// Creates an object that manages overlay entries for selection handles.
   ///
   /// The [context] must not be null and must have an [Overlay] as an ancestor.
   TextSelectionOverlay({
@@ -283,7 +283,7 @@ class TextSelectionOverlay {
        assert(handlesVisible != null),
        _handlesVisible = handlesVisible,
        _value = value {
-    final OverlayState overlay = Overlay.of(context);
+    final OverlayState overlay = Overlay.of(context, rootOverlay: true);
     assert(overlay != null,
       'No Overlay widget exists above $context.\n'
       'Usually the Navigator created by WidgetsApp provides the overlay. Perhaps your '
@@ -410,7 +410,7 @@ class TextSelectionOverlay {
 
 
 
-    Overlay.of(context, debugRequiredFor: debugRequiredFor).insertAll(_handles);
+    Overlay.of(context, rootOverlay: true, debugRequiredFor: debugRequiredFor).insertAll(_handles);
   }
 
   /// Destroys the handles by removing them from overlay.
@@ -426,7 +426,7 @@ class TextSelectionOverlay {
   void showToolbar() {
     assert(_toolbar == null);
     _toolbar = OverlayEntry(builder: _buildToolbar);
-    Overlay.of(context, debugRequiredFor: debugRequiredFor).insert(_toolbar);
+    Overlay.of(context, rootOverlay: true, debugRequiredFor: debugRequiredFor).insert(_toolbar);
     _toolbarController.forward(from: 0.0);
   }
 

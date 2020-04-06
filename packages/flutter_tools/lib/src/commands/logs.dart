@@ -46,7 +46,7 @@ class LogsCommand extends FlutterCommand {
       device.clearLogs();
     }
 
-    final DeviceLogReader logReader = device.getLogReader();
+    final DeviceLogReader logReader = await device.getLogReader();
 
     Cache.releaseLockEarly();
 
@@ -83,6 +83,6 @@ class LogsCommand extends FlutterCommand {
       throwToolExit('Error listening to $logReader logs.');
     }
 
-    return null;
+    return FlutterCommandResult.success();
   }
 }

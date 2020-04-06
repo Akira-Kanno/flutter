@@ -17,8 +17,10 @@ import 'fuchsia_pm.dart';
 /// The [FuchsiaSdk] instance.
 FuchsiaSdk get fuchsiaSdk => context.get<FuchsiaSdk>();
 
-/// The [FuchsiaArtifacts] instance.
-FuchsiaArtifacts get fuchsiaArtifacts => context.get<FuchsiaArtifacts>();
+/// Returns [true] if the current platform supports Fuchsia targets.
+bool isFuchsiaSupportedPlatform() {
+  return globals.platform.isLinux || globals.platform.isMacOS;
+}
 
 /// The Fuchsia SDK shell commands.
 ///
@@ -29,10 +31,14 @@ class FuchsiaSdk {
   FuchsiaPM get fuchsiaPM => _fuchsiaPM ??= FuchsiaPM();
   FuchsiaPM _fuchsiaPM;
 
-  /// Interface to the 'dev_finder' tool.
+  /// Interface to the 'device-finder' tool.
   FuchsiaDevFinder _fuchsiaDevFinder;
   FuchsiaDevFinder get fuchsiaDevFinder =>
-      _fuchsiaDevFinder ??= FuchsiaDevFinder();
+      _fuchsiaDevFinder ??= FuchsiaDevFinder(
+        fuchsiaArtifacts: globals.fuchsiaArtifacts,
+        logger: globals.logger,
+        processManager: globals.processManager
+      );
 
   /// Interface to the 'kernel_compiler' tool.
   FuchsiaKernelCompiler _fuchsiaKernelCompiler;
@@ -40,29 +46,30 @@ class FuchsiaSdk {
       _fuchsiaKernelCompiler ??= FuchsiaKernelCompiler();
 
   /// Example output:
-  ///    $ dev_finder list -full
+  ///    $ device-finder list -full
   ///    > 192.168.42.56 paper-pulp-bush-angel
-  Future<String> listDevices() async {
-    if (fuchsiaArtifacts.devFinder == null ||
-        !fuchsiaArtifacts.devFinder.existsSync()) {
+  Future<String> listDevices({ Duration timeout }) async {
+    if (globals.fuchsiaArtifacts.devFinder == null ||
+        !globals.fuchsiaArtifacts.devFinder.existsSync()) {
       return null;
     }
-    final List<String> devices = await fuchsiaDevFinder.list();
+    final List<String> devices = await fuchsiaDevFinder.list(timeout: timeout);
     if (devices == null) {
       return null;
     }
     return devices.isNotEmpty ? devices[0] : null;
   }
 
-  /// Returns the fuchsia system logs for an attached device.
+  /// Returns the fuchsia system logs for an attached device where
+  /// [id] is the IP address of the device.
   Stream<String> syslogs(String id) {
     Process process;
     try {
       final StreamController<String> controller = StreamController<String>(onCancel: () {
         process.kill();
       });
-      if (fuchsiaArtifacts.sshConfig == null ||
-          !fuchsiaArtifacts.sshConfig.existsSync()) {
+      if (globals.fuchsiaArtifacts.sshConfig == null ||
+          !globals.fuchsiaArtifacts.sshConfig.existsSync()) {
         globals.printError('Cannot read device logs: No ssh config.');
         globals.printError('Have you set FUCHSIA_SSH_CONFIG or FUCHSIA_BUILD_DIR?');
         return null;
@@ -71,8 +78,8 @@ class FuchsiaSdk {
       final List<String> cmd = <String>[
         'ssh',
         '-F',
-        fuchsiaArtifacts.sshConfig.absolute.path,
-        id,
+        globals.fuchsiaArtifacts.sshConfig.absolute.path,
+        id, // The device's IP.
         remoteCommand,
       ];
       globals.processManager.start(cmd).then((Process newProcess) {
@@ -86,7 +93,7 @@ class FuchsiaSdk {
             .transform(const LineSplitter()));
       });
       return controller.stream;
-    } catch (exception) {
+    } on Exception catch (exception) {
       globals.printTrace('$exception');
     }
     return const Stream<String>.empty();
@@ -109,7 +116,7 @@ class FuchsiaArtifacts {
   /// FUCHSIA_SSH_CONFIG) to find the ssh configuration needed to talk to
   /// a device.
   factory FuchsiaArtifacts.find() {
-    if (!globals.platform.isLinux && !globals.platform.isMacOS) {
+    if (!isFuchsiaSupportedPlatform()) {
       // Don't try to find the artifacts on platforms that are not supported.
       return FuchsiaArtifacts();
     }
@@ -126,7 +133,7 @@ class FuchsiaArtifacts {
 
     final String fuchsia = globals.cache.getArtifactDirectory('fuchsia').path;
     final String tools = globals.fs.path.join(fuchsia, 'tools');
-    final File devFinder = globals.fs.file(globals.fs.path.join(tools, 'dev_finder'));
+    final File devFinder = globals.fs.file(globals.fs.path.join(tools, 'device-finder'));
     final File pm = globals.fs.file(globals.fs.path.join(tools, 'pm'));
 
     return FuchsiaArtifacts(
@@ -149,4 +156,7 @@ class FuchsiaArtifacts {
 
   /// The pm tool.
   final File pm;
+
+  /// Returns true if the [sshConfig] file is not null and exists.
+  bool get hasSshConfig => sshConfig != null && sshConfig.existsSync();
 }

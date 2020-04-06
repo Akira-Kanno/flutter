@@ -96,6 +96,13 @@ mixin PaintingBinding on BindingBase, ServicesBinding {
   void evict(String asset) {
     super.evict(asset);
     imageCache.clear();
+    imageCache.clearLiveImages();
+  }
+
+  @override
+  void handleMemoryPressure() {
+    super.handleMemoryPressure();
+    imageCache.clear();
   }
 
   /// Listenable that notifies when the available fonts on the system have

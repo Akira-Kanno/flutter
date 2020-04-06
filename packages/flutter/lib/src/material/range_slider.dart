@@ -273,7 +273,7 @@ class RangeSlider extends StatefulWidget {
   /// There are two labels: one for the start thumb and one for the end thumb.
   ///
   /// Each label is rendered using the active [ThemeData]'s
-  /// [ThemeData.textTheme.body2] text style, with the
+  /// [ThemeData.textTheme.bodyText1] text style, with the
   /// theme data's [ThemeData.colorScheme.onPrimaryColor]. The label's text
   /// style can be overridden with [SliderThemeData.valueIndicatorTextStyle].
   ///
@@ -564,7 +564,7 @@ class _RangeSliderState extends State<RangeSlider> with TickerProviderStateMixin
       overlayShape: sliderTheme.overlayShape ?? _defaultOverlayShape,
       rangeValueIndicatorShape: sliderTheme.rangeValueIndicatorShape ?? _defaultValueIndicatorShape,
       showValueIndicator: sliderTheme.showValueIndicator ?? _defaultShowValueIndicator,
-      valueIndicatorTextStyle: sliderTheme.valueIndicatorTextStyle ?? theme.textTheme.body2.copyWith(
+      valueIndicatorTextStyle: sliderTheme.valueIndicatorTextStyle ?? theme.textTheme.bodyText1.copyWith(
         color: theme.colorScheme.onPrimary,
       ),
       minThumbSeparation: sliderTheme.minThumbSeparation ?? _defaultMinThumbSeparation,
@@ -903,10 +903,14 @@ class _RenderRangeSlider extends RenderBox with RelayoutWhenSystemFontsChangeMix
         return 0.1;
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
-      default:
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
         // Matches Android implementation of material slider.
         return 0.05;
     }
+    assert(false, 'Unhandled TargetPlatform $_platform');
+    return 0.05;
   }
 
   void _updateLabelPainters() {

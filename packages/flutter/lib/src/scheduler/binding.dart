@@ -60,7 +60,6 @@ typedef SchedulingStrategy = bool Function({ int priority, SchedulerBinding sche
 
 class _TaskEntry<T> {
   _TaskEntry(this.task, this.priority, this.debugLabel, this.flow) {
-    // ignore: prefer_asserts_in_initializer_lists
     assert(() {
       debugStack = StackTrace.current;
       return true;
@@ -255,17 +254,22 @@ mixin SchedulerBinding on BindingBase, ServicesBinding {
           callback(timings);
         }
       } catch (exception, stack) {
-        FlutterError.reportError(FlutterErrorDetails(
-          exception: exception,
-          stack: stack,
-          context: ErrorDescription('while executing callbacks for FrameTiming'),
-          informationCollector: () sync* {
+        InformationCollector collector;
+        assert(() {
+          collector = () sync* {
             yield DiagnosticsProperty<TimingsCallback>(
               'The TimingsCallback that gets executed was',
               callback,
               style: DiagnosticsTreeStyle.errorProperty,
             );
-          },
+          };
+          return true;
+        }());
+        FlutterError.reportError(FlutterErrorDetails(
+          exception: exception,
+          stack: stack,
+          context: ErrorDescription('while executing callbacks for FrameTiming'),
+          informationCollector: collector
         ));
       }
     }
@@ -335,19 +339,13 @@ mixin SchedulerBinding on BindingBase, ServicesBinding {
         _setFramesEnabledState(true);
         break;
       case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
         _setFramesEnabledState(false);
-        break;
-      default:
         break;
     }
   }
 
   Future<String> _handleLifecycleMessage(String message) async {
-    // TODO(chunhtai): remove the workaround once the issue is fixed
-    // https://github.com/flutter/flutter/issues/39832
-    if (message == 'AppLifecycleState.detached')
-      return null;
-
     handleAppLifecycleStateChanged(_parseAppLifecycleMessage(message));
     return null;
   }
@@ -360,6 +358,8 @@ mixin SchedulerBinding on BindingBase, ServicesBinding {
         return AppLifecycleState.resumed;
       case 'AppLifecycleState.inactive':
         return AppLifecycleState.inactive;
+      case 'AppLifecycleState.detached':
+        return AppLifecycleState.detached;
     }
     return null;
   }
@@ -779,7 +779,7 @@ mixin SchedulerBinding on BindingBase, ServicesBinding {
   ///  * [scheduleWarmUpFrame], which ignores the "Vsync" signal entirely and
   ///    triggers a frame immediately.
   void scheduleFrame() {
-    if (_hasScheduledFrame || !_framesEnabled)
+    if (_hasScheduledFrame || !framesEnabled)
       return;
     assert(() {
       if (debugPrintScheduleFrameStacks)
@@ -811,6 +811,11 @@ mixin SchedulerBinding on BindingBase, ServicesBinding {
   /// Consider using [scheduleWarmUpFrame] instead if the goal is to update the
   /// rendering as soon as possible (e.g. at application startup).
   void scheduleForcedFrame() {
+    // TODO(chunhtai): Removes the if case once the issue is fixed
+    // https://github.com/flutter/flutter/issues/45131
+    if (!framesEnabled)
+      return;
+
     if (_hasScheduledFrame)
       return;
     assert(() {

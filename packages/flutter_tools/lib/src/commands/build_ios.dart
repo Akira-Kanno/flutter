@@ -18,12 +18,17 @@ import 'build.dart';
 /// .ipas, see https://flutter.dev/docs/deployment/ios.
 class BuildIOSCommand extends BuildSubCommand {
   BuildIOSCommand() {
+    addTreeShakeIconsFlag();
+    addSplitDebugInfoOption();
     addBuildModeFlags(defaultToRelease: false);
     usesTargetOption();
     usesFlavorOption();
     usesPubOption();
     usesBuildNumberOption();
     usesBuildNameOption();
+    addDartObfuscationOption();
+    usesDartDefineOption();
+    usesExtraFrontendOptions();
     argParser
       ..addFlag('simulator',
         help: 'Build for the iOS simulator instead of the device.',
@@ -84,7 +89,7 @@ class BuildIOSCommand extends BuildSubCommand {
     );
 
     if (!result.success) {
-      await diagnoseXcodeBuildFailure(result);
+      await diagnoseXcodeBuildFailure(result, globals.flutterUsage, globals.logger);
       throwToolExit('Encountered error while building for $logTarget.');
     }
 
@@ -92,6 +97,6 @@ class BuildIOSCommand extends BuildSubCommand {
       globals.printStatus('Built ${result.output}.');
     }
 
-    return null;
+    return FlutterCommandResult.success();
   }
 }
