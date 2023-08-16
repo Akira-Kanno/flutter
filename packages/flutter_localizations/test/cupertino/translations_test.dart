@@ -2,11 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as path;
+
+import '../test_utils.dart';
+
+final String rootDirectoryPath = Directory.current.path;
 
 void main() {
   for (final String language in kCupertinoSupportedLanguages) {
@@ -31,6 +38,11 @@ void main() {
       expect(localizations.datePickerDayOfMonth(1), isNotNull);
       expect(localizations.datePickerDayOfMonth(2), isNotNull);
       expect(localizations.datePickerDayOfMonth(10), isNotNull);
+
+      expect(localizations.datePickerDayOfMonth(0, 1), isNotNull);
+      expect(localizations.datePickerDayOfMonth(1, 2), isNotNull);
+      expect(localizations.datePickerDayOfMonth(2, 3), isNotNull);
+      expect(localizations.datePickerDayOfMonth(10, 4), isNotNull);
 
       expect(localizations.datePickerMediumDate(DateTime(2019, 3, 25)), isNotNull);
 
@@ -88,6 +100,12 @@ void main() {
       expect(localizations.copyButtonLabel, isNotNull);
       expect(localizations.pasteButtonLabel, isNotNull);
       expect(localizations.selectAllButtonLabel, isNotNull);
+
+      expect(localizations.tabSemanticsLabel(tabIndex: 2, tabCount: 5), isNotNull);
+      expect(localizations.tabSemanticsLabel(tabIndex: 2, tabCount: 5), isNot(contains(r'$tabIndex')));
+      expect(localizations.tabSemanticsLabel(tabIndex: 2, tabCount: 5), isNot(contains(r'$tabCount')));
+      expect(() => localizations.tabSemanticsLabel(tabIndex: 0, tabCount: 5), throwsAssertionError);
+      expect(() => localizations.tabSemanticsLabel(tabIndex: 2, tabCount: 0), throwsAssertionError);
     });
   }
 
@@ -123,11 +141,16 @@ void main() {
 
   // Regression test for https://github.com/flutter/flutter/issues/53036.
   testWidgets('`nb` uses `no` as its synonym when `nb` arb file is not present', (WidgetTester tester) async {
-    final File nbCupertinoArbFile = File('lib/src/l10n/cupertino_nb.arb');
-    final File noCupertinoArbFile = File('lib/src/l10n/cupertino_no.arb');
+    final File nbCupertinoArbFile = File(
+      path.join(rootDirectoryPath, 'lib', 'src', 'l10n', 'cupertino_nb.arb'),
+    );
+    final File noCupertinoArbFile = File(
+      path.join(rootDirectoryPath, 'lib', 'src', 'l10n', 'cupertino_no.arb'),
+    );
+
 
     if (noCupertinoArbFile.existsSync() && !nbCupertinoArbFile.existsSync()) {
-      Locale locale = const Locale.fromSubtags(languageCode: 'no', scriptCode: null, countryCode: null);
+      Locale locale = const Locale.fromSubtags(languageCode: 'no');
       expect(GlobalCupertinoLocalizations.delegate.isSupported(locale), isTrue);
       CupertinoLocalizations localizations = await GlobalCupertinoLocalizations.delegate.load(locale);
       expect(localizations, isA<CupertinoLocalizationNo>());
@@ -136,7 +159,7 @@ void main() {
       final String copyButtonLabelNo = localizations.copyButtonLabel;
       final String cutButtonLabelNo = localizations.cutButtonLabel;
 
-      locale = const Locale.fromSubtags(languageCode: 'nb', scriptCode: null, countryCode: null);
+      locale = const Locale.fromSubtags(languageCode: 'nb');
       expect(GlobalCupertinoLocalizations.delegate.isSupported(locale), isTrue);
       localizations = await GlobalCupertinoLocalizations.delegate.load(locale);
       expect(localizations, isA<CupertinoLocalizationNb>());
@@ -145,4 +168,93 @@ void main() {
       expect(localizations.cutButtonLabel, cutButtonLabelNo);
     }
   });
+
+  // Regression test for https://github.com/flutter/flutter/issues/36704.
+  testWidgets('kn arb file should be properly Unicode escaped', (WidgetTester tester) async {
+    final File file = File(
+      path.join(rootDirectoryPath, 'lib', 'src', 'l10n', 'cupertino_kn.arb'),
+    );
+
+    final Map<String, dynamic> bundle = json.decode(file.readAsStringSync()) as Map<String, dynamic>;
+
+    // Encodes the arb resource values if they have not already been
+    // encoded.
+    encodeBundleTranslations(bundle);
+
+    // Generates the encoded arb output file in as a string.
+    final String encodedArbFile = generateArbString(bundle);
+
+    // After encoding the bundles, the generated string should match
+    // the existing material_kn.arb.
+    if (Platform.isWindows) {
+      // On Windows, the character '\n' can output the two-character sequence
+      // '\r\n' (and when reading the file back, '\r\n' is translated back
+      // into a single '\n' character).
+      expect(file.readAsStringSync().replaceAll('\r\n', '\n'), encodedArbFile);
+    } else {
+      expect(file.readAsStringSync(), encodedArbFile);
+    }
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/110451.
+  testWidgets('Finnish translation for tab label', (WidgetTester tester) async {
+    const Locale locale = Locale('fi');
+    expect(GlobalCupertinoLocalizations.delegate.isSupported(locale), isTrue);
+    final CupertinoLocalizations localizations = await GlobalCupertinoLocalizations.delegate.load(locale);
+    expect(localizations, isA<CupertinoLocalizationFi>());
+    expect(localizations.tabSemanticsLabel(tabIndex: 1, tabCount: 2), 'Välilehti 1 kautta 2');
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/130874.
+  testWidgets('buildButtonItems builds a localized "No Replacements found" button when no suggestions', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      CupertinoApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: GlobalCupertinoLocalizations.delegates,
+        supportedLocales: const <Locale>[Locale('en'), Locale('ru')],
+        home: _FakeEditableText()
+      ),
+    );
+    final _FakeEditableTextState editableTextState =
+        tester.state(find.byType(_FakeEditableText));
+    final List<ContextMenuButtonItem>? buttonItems =
+        CupertinoSpellCheckSuggestionsToolbar.buildButtonItems(editableTextState);
+
+    expect(buttonItems, isNotNull);
+    expect(buttonItems, hasLength(1));
+    expect(buttonItems!.first.label, 'Варианты замены не найдены');
+    expect(buttonItems.first.onPressed, isNull);
+  });
+
+}
+
+class _FakeEditableText extends EditableText {
+  _FakeEditableText() : super(
+    controller: TextEditingController(),
+    focusNode: FocusNode(),
+    backgroundCursorColor: CupertinoColors.white,
+    cursorColor: CupertinoColors.white,
+    style: const TextStyle(),
+  );
+
+  @override
+  _FakeEditableTextState createState() => _FakeEditableTextState();
+}
+
+class _FakeEditableTextState extends EditableTextState {
+  _FakeEditableTextState();
+
+  @override
+  TextEditingValue get currentTextEditingValue => TextEditingValue.empty;
+
+  @override
+  SuggestionSpan? findSuggestionSpanAtCursorIndex(int cursorIndex) {
+    return const SuggestionSpan(
+      TextRange(
+        start: 0,
+        end: 0,
+      ),
+      <String>[],
+    );
+  }
 }

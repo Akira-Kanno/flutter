@@ -2,41 +2,50 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 
 const Color kSelectedColor = Color(0xFF00FF00);
 const Color kUnselectedColor = Colors.transparent;
 
-Widget buildFrame(TabController tabController, { Color color, Color selectedColor, double indicatorSize = 12.0 }) {
-  return Directionality(
-    textDirection: TextDirection.ltr,
-    child: Theme(
-      data: ThemeData(accentColor: kSelectedColor),
-      child: SizedBox.expand(
-        child: Center(
-          child: SizedBox(
-            width: 400.0,
-            height: 400.0,
-            child: Column(
-              children: <Widget>[
-                TabPageSelector(
-                  controller: tabController,
-                  color: color,
-                  selectedColor: selectedColor,
-                  indicatorSize: indicatorSize,
-                ),
-                Flexible(
-                  child: TabBarView(
+Widget buildFrame(TabController tabController, { Color? color, Color? selectedColor, double indicatorSize = 12.0, BorderStyle? borderStyle }) {
+  return Localizations(
+    locale: const Locale('en', 'US'),
+    delegates: const <LocalizationsDelegate<dynamic>>[
+      DefaultMaterialLocalizations.delegate,
+      DefaultWidgetsLocalizations.delegate,
+    ],
+    child: Directionality(
+      textDirection: TextDirection.ltr,
+      child: Theme(
+        data: ThemeData(colorScheme: const ColorScheme.light().copyWith(secondary: kSelectedColor)),
+        child: SizedBox.expand(
+          child: Center(
+            child: SizedBox(
+              width: 400.0,
+              height: 400.0,
+              child: Column(
+                children: <Widget>[
+                  TabPageSelector(
                     controller: tabController,
-                    children: const <Widget>[
-                      Center(child: Text('0')),
-                      Center(child: Text('1')),
-                      Center(child: Text('2')),
-                    ],
+                    color: color,
+                    selectedColor: selectedColor,
+                    indicatorSize: indicatorSize,
+                    borderStyle: borderStyle,
                   ),
-                ),
-              ],
+                  Flexible(
+                    child: TabBarView(
+                      controller: tabController,
+                      children: const <Widget>[
+                        Center(child: Text('0')),
+                        Center(child: Text('1')),
+                        Center(child: Text('2')),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -56,7 +65,7 @@ List<Color> indicatorColors(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('PageSelector responds correctly to setting the TabController index', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('PageSelector responds correctly to setting the TabController index', (WidgetTester tester) async {
     final TabController tabController = TabController(
       vsync: const TestVSync(),
       length: 3,
@@ -77,7 +86,7 @@ void main() {
     expect(indicatorColors(tester), const <Color>[kUnselectedColor, kUnselectedColor, kSelectedColor]);
   });
 
-  testWidgets('PageSelector responds correctly to TabController.animateTo()', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('PageSelector responds correctly to TabController.animateTo()', (WidgetTester tester) async {
     final TabController tabController = TabController(
       vsync: const TestVSync(),
       length: 3,
@@ -90,7 +99,7 @@ void main() {
     tabController.animateTo(1, duration: const Duration(milliseconds: 200));
     await tester.pump();
     // Verify that indicator 0's color is becoming increasingly transparent,
-    /// and indicator 1's color is becoming increasingly opaque during the
+    // and indicator 1's color is becoming increasingly opaque during the
     // 200ms animation. Indicator 2 remains transparent throughout.
     await tester.pump(const Duration(milliseconds: 10));
     List<Color> colors = indicatorColors(tester);
@@ -120,7 +129,7 @@ void main() {
     expect(indicatorColors(tester), const <Color>[kUnselectedColor, kUnselectedColor, kSelectedColor]);
   });
 
-  testWidgets('PageSelector responds correctly to TabBarView drags', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('PageSelector responds correctly to TabBarView drags', (WidgetTester tester) async {
     final TabController tabController = TabController(
       vsync: const TestVSync(),
       initialIndex: 1,
@@ -179,7 +188,7 @@ void main() {
 
   });
 
-  testWidgets('PageSelector indicatorColors', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('PageSelector indicatorColors', (WidgetTester tester) async {
     const Color kRed = Color(0xFFFF0000);
     const Color kBlue = Color(0xFF0000FF);
 
@@ -212,10 +221,56 @@ void main() {
     ).evaluate();
 
     // Indicators get an 8 pixel margin, 16 + 8 = 24.
-    for (final Element indicatorElement in indicatorElements)
+    for (final Element indicatorElement in indicatorElements) {
       expect(indicatorElement.size, const Size(24.0, 24.0));
+    }
 
     expect(tester.getSize(find.byType(TabPageSelector)).height, 24.0);
   });
 
+    testWidgetsWithLeakTracking('PageSelector circle border', (WidgetTester tester) async {
+    final TabController tabController = TabController(
+      vsync: const TestVSync(),
+      initialIndex: 1,
+      length: 3,
+    );
+
+    Iterable<TabPageSelectorIndicator> indicators;
+
+    // Default border
+    await tester.pumpWidget(buildFrame(tabController));
+    indicators = tester.widgetList(
+      find.descendant(
+        of: find.byType(TabPageSelector),
+        matching: find.byType(TabPageSelectorIndicator),
+      ),
+    );
+    for (final TabPageSelectorIndicator indicator in indicators) {
+      expect(indicator.borderStyle, BorderStyle.solid);
+    }
+
+    // No border
+    await tester.pumpWidget(buildFrame(tabController, borderStyle: BorderStyle.none));
+    indicators = tester.widgetList(
+      find.descendant(
+        of: find.byType(TabPageSelector),
+        matching: find.byType(TabPageSelectorIndicator),
+      ),
+    );
+    for (final TabPageSelectorIndicator indicator in indicators) {
+      expect(indicator.borderStyle, BorderStyle.none);
+    }
+
+    // Solid border
+    await tester.pumpWidget(buildFrame(tabController, borderStyle: BorderStyle.solid));
+    indicators = tester.widgetList(
+      find.descendant(
+        of: find.byType(TabPageSelector),
+        matching: find.byType(TabPageSelectorIndicator),
+      ),
+    );
+    for (final TabPageSelectorIndicator indicator in indicators) {
+      expect(indicator.borderStyle, BorderStyle.solid);
+    }
+  });
 }

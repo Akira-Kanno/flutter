@@ -2,16 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/painting.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 import '../widgets/semantics_tester.dart';
 
 void main() {
-  testWidgets('Card can take semantic text from multiple children', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('Card can take semantic text from multiple children', (WidgetTester tester) async {
     final SemanticsTester semantics = SemanticsTester(tester);
     await tester.pumpWidget(
       Directionality(
@@ -24,9 +22,9 @@ void main() {
                 children: <Widget>[
                   const Text('I am text!'),
                   const Text('Moar text!!1'),
-                  MaterialButton(
-                    child: const Text('Button'),
+                  ElevatedButton(
                     onPressed: () { },
+                    child: const Text('Button'),
                   ),
                 ],
               ),
@@ -79,19 +77,18 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('Card merges children when it is a semanticContainer', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('Card merges children when it is a semanticContainer', (WidgetTester tester) async {
     final SemanticsTester semantics = SemanticsTester(tester);
     debugResetSemanticsIdCounter();
 
     await tester.pumpWidget(
-      Directionality(
+      const Directionality(
         textDirection: TextDirection.ltr,
         child: Material(
           child: Center(
             child: Card(
-              semanticContainer: true,
               child: Column(
-                children: const <Widget>[
+                children: <Widget>[
                   Text('First child'),
                   Text('Second child'),
                 ],
@@ -119,7 +116,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('Card margin', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('Card margin', (WidgetTester tester) async {
     const Key contentsKey = ValueKey<String>('contents');
 
     await tester.pumpWidget(
@@ -137,7 +134,7 @@ void main() {
     );
 
     // Default margin is 4
-    expect(tester.getTopLeft(find.byType(Card)), const Offset(0.0, 0.0));
+    expect(tester.getTopLeft(find.byType(Card)), Offset.zero);
     expect(tester.getSize(find.byType(Card)), const Size(108.0, 108.0));
 
     expect(tester.getTopLeft(find.byKey(contentsKey)), const Offset(4.0, 4.0));
@@ -159,14 +156,14 @@ void main() {
     );
 
     // Specified margin is zero
-    expect(tester.getTopLeft(find.byType(Card)), const Offset(0.0, 0.0));
+    expect(tester.getTopLeft(find.byType(Card)), Offset.zero);
     expect(tester.getSize(find.byType(Card)), const Size(100.0, 100.0));
 
-    expect(tester.getTopLeft(find.byKey(contentsKey)), const Offset(0.0, 0.0));
+    expect(tester.getTopLeft(find.byKey(contentsKey)), Offset.zero);
     expect(tester.getSize(find.byKey(contentsKey)), const Size(100.0, 100.0));
   });
 
-  testWidgets('Card clipBehavior property passes through to the Material', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('Card clipBehavior property passes through to the Material', (WidgetTester tester) async {
     await tester.pumpWidget(const Card());
     expect(tester.widget<Material>(find.byType(Material)).clipBehavior, Clip.none);
 
@@ -174,7 +171,7 @@ void main() {
     expect(tester.widget<Material>(find.byType(Material)).clipBehavior, Clip.antiAlias);
   });
 
-  testWidgets('Card clipBehavior property defers to theme when null', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('Card clipBehavior property defers to theme when null', (WidgetTester tester) async {
     await tester.pumpWidget(Builder(builder: (BuildContext context) {
       final ThemeData themeData = Theme.of(context);
       return Theme(
@@ -183,14 +180,14 @@ void main() {
             clipBehavior: Clip.antiAliasWithSaveLayer,
           ),
         ),
-        child: const Card(clipBehavior: null),
+        child: const Card(),
       );
     }));
     expect(tester.widget<Material>(find.byType(Material)).clipBehavior, Clip.antiAliasWithSaveLayer);
   });
 
-  testWidgets('Card shadowColor', (WidgetTester tester) async {
-    Material _getCardMaterial(WidgetTester tester) {
+  testWidgetsWithLeakTracking('Card shadowColor', (WidgetTester tester) async {
+    Material getCardMaterial(WidgetTester tester) {
       return tester.widget<Material>(
         find.descendant(
           of: find.byType(Card),
@@ -199,9 +196,9 @@ void main() {
       );
     }
 
-    Card _getCard(WidgetTester tester) {
+    Card getCard(WidgetTester tester) {
       return tester.widget<Card>(
-          find.byType(Card)
+        find.byType(Card),
       );
     }
 
@@ -209,8 +206,8 @@ void main() {
       const Card(),
     );
 
-    expect(_getCard(tester).shadowColor, null);
-    expect(_getCardMaterial(tester).shadowColor, const Color(0xFF000000));
+    expect(getCard(tester).shadowColor, null);
+    expect(getCardMaterial(tester).shadowColor, const Color(0xFF000000));
 
     await tester.pumpWidget(
       const Card(
@@ -218,7 +215,7 @@ void main() {
       ),
     );
 
-    expect(_getCardMaterial(tester).shadowColor, _getCard(tester).shadowColor);
-    expect(_getCardMaterial(tester).shadowColor, Colors.red);
+    expect(getCardMaterial(tester).shadowColor, getCard(tester).shadowColor);
+    expect(getCardMaterial(tester).shadowColor, Colors.red);
   });
 }

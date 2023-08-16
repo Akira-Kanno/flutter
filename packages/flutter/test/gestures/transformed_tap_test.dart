@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 
 void main() {
-  testWidgets('gets local corrdinates', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('gets local coordinates', (WidgetTester tester) async {
     int tapCount = 0;
     int tapCancelCount = 0;
     final List<TapDownDetails> downDetails = <TapDownDetails>[];
@@ -49,7 +49,7 @@ void main() {
     expect(upDetails.single.globalPosition, const Offset(400, 300));
   });
 
-  testWidgets('kTouchSlop is evaluated in the global coordinate space when scaled up', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('kTouchSlop is evaluated in the global coordinate space when scaled up', (WidgetTester tester) async {
     int tapCount = 0;
     int tapCancelCount = 0;
     final List<TapDownDetails> downDetails = <TapDownDetails>[];
@@ -112,7 +112,7 @@ void main() {
     expect(upDetails, isEmpty);
   });
 
-  testWidgets('kTouchSlop is evaluated in the global coordinate space when scaled down', (WidgetTester tester) async {
+  testWidgetsWithLeakTracking('kTouchSlop is evaluated in the global coordinate space when scaled down', (WidgetTester tester) async {
     int tapCount = 0;
     int tapCancelCount = 0;
     final List<TapDownDetails> downDetails = <TapDownDetails>[];

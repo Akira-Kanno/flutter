@@ -4,14 +4,14 @@
 
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 
 void main() {
   group('Horizontal', () {
-    testWidgets('gets local corrdinates', (WidgetTester tester) async {
+    testWidgets('gets local coordinates', (WidgetTester tester) async {
       int dragCancelCount = 0;
       final List<DragDownDetails> downDetails = <DragDownDetails>[];
       final List<DragEndDetails> endDetails = <DragEndDetails>[];
@@ -61,12 +61,12 @@ void main() {
         const Offset(100, 0),
       );
       expect(
-        updateDetails.fold(0.0, (double offset, DragUpdateDetails details) => offset + details.primaryDelta),
+        updateDetails.fold(0.0, (double offset, DragUpdateDetails details) => offset + (details.primaryDelta ?? 0)),
         100.0,
       );
     });
 
-    testWidgets('kTouchSlop is evaluated in the global coordinate space when scaled up', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('kTouchSlop is evaluated in the global coordinate space when scaled up', (WidgetTester tester) async {
       int dragCancelCount = 0;
       final List<DragDownDetails> downDetails = <DragDownDetails>[];
       final List<DragEndDetails> endDetails = <DragEndDetails>[];
@@ -164,7 +164,7 @@ void main() {
       updateDetails.clear();
     });
 
-    testWidgets('kTouchSlop is evaluated in the global coordinate space when scaled down', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('kTouchSlop is evaluated in the global coordinate space when scaled down', (WidgetTester tester) async {
       int dragCancelCount = 0;
       final List<DragDownDetails> downDetails = <DragDownDetails>[];
       final List<DragEndDetails> endDetails = <DragEndDetails>[];
@@ -262,7 +262,7 @@ void main() {
       updateDetails.clear();
     });
 
-    testWidgets('kTouchSlop is evaluated in the global coordinate space when roateted 45 degrees', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('kTouchSlop is evaluated in the global coordinate space when rotated 45 degrees', (WidgetTester tester) async {
       int dragCancelCount = 0;
       final List<DragDownDetails> downDetails = <DragDownDetails>[];
       final List<DragEndDetails> endDetails = <DragEndDetails>[];
@@ -339,7 +339,7 @@ void main() {
   });
 
   group('Vertical', () {
-    testWidgets('gets local corrdinates', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('gets local coordinates', (WidgetTester tester) async {
       int dragCancelCount = 0;
       final List<DragDownDetails> downDetails = <DragDownDetails>[];
       final List<DragEndDetails> endDetails = <DragEndDetails>[];
@@ -389,12 +389,12 @@ void main() {
         const Offset(0, 100),
       );
       expect(
-        updateDetails.fold(0.0, (double offset, DragUpdateDetails details) => offset + details.primaryDelta),
+        updateDetails.fold(0.0, (double offset, DragUpdateDetails details) => offset + (details.primaryDelta ?? 0)),
         100.0,
       );
     });
 
-    testWidgets('kTouchSlop is evaluated in the global coordinate space when scaled up', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('kTouchSlop is evaluated in the global coordinate space when scaled up', (WidgetTester tester) async {
       int dragCancelCount = 0;
       final List<DragDownDetails> downDetails = <DragDownDetails>[];
       final List<DragEndDetails> endDetails = <DragEndDetails>[];
@@ -492,7 +492,7 @@ void main() {
       updateDetails.clear();
     });
 
-    testWidgets('kTouchSlop is evaluated in the global coordinate space when scaled down', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('kTouchSlop is evaluated in the global coordinate space when scaled down', (WidgetTester tester) async {
       int dragCancelCount = 0;
       final List<DragDownDetails> downDetails = <DragDownDetails>[];
       final List<DragEndDetails> endDetails = <DragEndDetails>[];
@@ -590,7 +590,7 @@ void main() {
       updateDetails.clear();
     });
 
-    testWidgets('kTouchSlop is evaluated in the global coordinate space when roateted 45 degrees', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('kTouchSlop is evaluated in the global coordinate space when rotated 45 degrees', (WidgetTester tester) async {
       int dragCancelCount = 0;
       final List<DragDownDetails> downDetails = <DragDownDetails>[];
       final List<DragEndDetails> endDetails = <DragEndDetails>[];

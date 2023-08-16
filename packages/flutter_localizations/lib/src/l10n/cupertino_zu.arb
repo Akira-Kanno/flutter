@@ -18,5 +18,12 @@
   "cutButtonLabel": "Sika",
   "copyButtonLabel": "Kopisha",
   "pasteButtonLabel": "Namathisela",
-  "selectAllButtonLabel": "Khetha konke"
+  "selectAllButtonLabel": "Khetha konke",
+  "tabSemanticsLabel": "Ithebhu $tabIndex kwangu-$tabCount",
+  "modalBarrierDismissLabel": "Cashisa",
+  "searchTextFieldPlaceholderLabel": "Sesha",
+  "noSpellCheckReplacementsLabel": "Akukho Okuzofakwa Esikhundleni Okutholakele",
+  "menuDismissLabel": "Chitha imenyu",
+  "lookUpButtonLabel": "Look Up",
+  "searchWebButtonLabel": "Search Web"
 }

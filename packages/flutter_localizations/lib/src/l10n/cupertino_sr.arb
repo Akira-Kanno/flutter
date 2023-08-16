@@ -23,5 +23,12 @@
   "cutButtonLabel": "Исеци",
   "copyButtonLabel": "Копирај",
   "pasteButtonLabel": "Налепи",
-  "selectAllButtonLabel": "Изабери све"
+  "selectAllButtonLabel": "Изабери све",
+  "tabSemanticsLabel": "$tabIndex. картица од $tabCount",
+  "modalBarrierDismissLabel": "Одбаци",
+  "searchTextFieldPlaceholderLabel": "Претражите",
+  "noSpellCheckReplacementsLabel": "Нису пронађене замене",
+  "menuDismissLabel": "Одбаците мени",
+  "lookUpButtonLabel": "Look Up",
+  "searchWebButtonLabel": "Search Web"
 }

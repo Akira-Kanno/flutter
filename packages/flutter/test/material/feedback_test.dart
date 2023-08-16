@@ -5,39 +5,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 import '../widgets/semantics_tester.dart';
 import 'feedback_tester.dart';
 
 void main () {
   const Duration kWaitDuration = Duration(seconds: 1);
 
-  FeedbackTester feedback;
+  late FeedbackTester feedback;
 
   setUp(() {
     feedback = FeedbackTester();
   });
 
   tearDown(() {
-    feedback?.dispose();
+    feedback.dispose();
   });
 
   group('Feedback on Android', () {
-    List<Map<String, Object>> semanticEvents;
+    late List<Map<String, Object>> semanticEvents;
 
     setUp(() {
       semanticEvents = <Map<String, Object>>[];
-      SystemChannels.accessibility.setMockMessageHandler((dynamic message) async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockDecodedMessageHandler<dynamic>(SystemChannels.accessibility, (dynamic message) async {
         final Map<dynamic, dynamic> typedMessage = message as Map<dynamic, dynamic>;
         semanticEvents.add(typedMessage.cast<String, Object>());
       });
     });
 
     tearDown(() {
-      SystemChannels.accessibility.setMockMessageHandler(null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockDecodedMessageHandler<dynamic>(SystemChannels.accessibility, null);
     });
 
-    testWidgets('forTap', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('forTap', (WidgetTester tester) async {
       final SemanticsTester semanticsTester = SemanticsTester(tester);
 
       await tester.pumpWidget(TestWidget(
@@ -58,25 +58,25 @@ void main () {
       expect(feedback.clickSoundCount, 1);
       expect(semanticEvents.single, <String, dynamic>{
         'type': 'tap',
-        'nodeId': object.debugSemantics.id,
+        'nodeId': object.debugSemantics!.id,
         'data': <String, dynamic>{},
       });
-      expect(object.debugSemantics.getSemanticsData().hasAction(SemanticsAction.tap), true);
+      expect(object.debugSemantics!.getSemanticsData().hasAction(SemanticsAction.tap), true);
 
       semanticsTester.dispose();
     });
 
-    testWidgets('forTap Wrapper', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('forTap Wrapper', (WidgetTester tester) async {
       final SemanticsTester semanticsTester = SemanticsTester(tester);
 
       int callbackCount = 0;
-      final VoidCallback callback = () {
+      void callback() {
         callbackCount++;
-      };
+      }
 
       await tester.pumpWidget(TestWidget(
         tapHandler: (BuildContext context) {
-          return Feedback.wrapForTap(callback, context);
+          return Feedback.wrapForTap(callback, context)!;
         },
       ));
       await tester.pumpAndSettle(kWaitDuration);
@@ -93,15 +93,15 @@ void main () {
       expect(callbackCount, 1);
       expect(semanticEvents.single, <String, dynamic>{
         'type': 'tap',
-        'nodeId': object.debugSemantics.id,
+        'nodeId': object.debugSemantics!.id,
         'data': <String, dynamic>{},
       });
-      expect(object.debugSemantics.getSemanticsData().hasAction(SemanticsAction.tap), true);
+      expect(object.debugSemantics!.getSemanticsData().hasAction(SemanticsAction.tap), true);
 
       semanticsTester.dispose();
     });
 
-    testWidgets('forLongPress', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('forLongPress', (WidgetTester tester) async {
       final SemanticsTester semanticsTester = SemanticsTester(tester);
 
       await tester.pumpWidget(TestWidget(
@@ -121,24 +121,24 @@ void main () {
       expect(feedback.clickSoundCount, 0);
       expect(semanticEvents.single, <String, dynamic>{
         'type': 'longPress',
-        'nodeId': object.debugSemantics.id,
+        'nodeId': object.debugSemantics!.id,
         'data': <String, dynamic>{},
       });
-      expect(object.debugSemantics.getSemanticsData().hasAction(SemanticsAction.longPress), true);
+      expect(object.debugSemantics!.getSemanticsData().hasAction(SemanticsAction.longPress), true);
 
       semanticsTester.dispose();
     });
 
-    testWidgets('forLongPress Wrapper', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('forLongPress Wrapper', (WidgetTester tester) async {
       final SemanticsTester semanticsTester = SemanticsTester(tester);
       int callbackCount = 0;
-      final VoidCallback callback = () {
+      void callback() {
         callbackCount++;
-      };
+      }
 
       await tester.pumpWidget(TestWidget(
         longPressHandler: (BuildContext context) {
-          return Feedback.wrapForLongPress(callback, context);
+          return Feedback.wrapForLongPress(callback, context)!;
         },
       ));
       await tester.pumpAndSettle(kWaitDuration);
@@ -155,10 +155,10 @@ void main () {
       expect(callbackCount, 1);
       expect(semanticEvents.single, <String, dynamic>{
         'type': 'longPress',
-        'nodeId': object.debugSemantics.id,
+        'nodeId': object.debugSemantics!.id,
         'data': <String, dynamic>{},
       });
-      expect(object.debugSemantics.getSemanticsData().hasAction(SemanticsAction.longPress), true);
+      expect(object.debugSemantics!.getSemanticsData().hasAction(SemanticsAction.longPress), true);
 
       semanticsTester.dispose();
     });
@@ -166,7 +166,7 @@ void main () {
   });
 
   group('Feedback on iOS', () {
-    testWidgets('forTap', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('forTap', (WidgetTester tester) async {
       await tester.pumpWidget(Theme(
         data: ThemeData(platform: TargetPlatform.iOS),
         child: TestWidget(
@@ -182,7 +182,7 @@ void main () {
       expect(feedback.clickSoundCount, 0);
     });
 
-    testWidgets('forLongPress', (WidgetTester tester) async {
+    testWidgetsWithLeakTracking('forLongPress', (WidgetTester tester) async {
       await tester.pumpWidget(Theme(
         data: ThemeData(platform: TargetPlatform.iOS),
         child: TestWidget(
@@ -202,15 +202,15 @@ void main () {
 
 class TestWidget extends StatelessWidget {
   const TestWidget({
-    Key key,
+    super.key,
     this.tapHandler = nullHandler,
     this.longPressHandler = nullHandler,
-  }) : super(key: key);
+  });
 
   final HandlerCreator tapHandler;
   final HandlerCreator longPressHandler;
 
-  static VoidCallback nullHandler(BuildContext context) => null;
+  static VoidCallback? nullHandler(BuildContext context) => null;
 
   @override
   Widget build(BuildContext context) {
@@ -222,4 +222,4 @@ class TestWidget extends StatelessWidget {
   }
 }
 
-typedef HandlerCreator = VoidCallback Function(BuildContext context);
+typedef HandlerCreator = VoidCallback? Function(BuildContext context);

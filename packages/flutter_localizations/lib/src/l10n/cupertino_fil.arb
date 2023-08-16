@@ -18,5 +18,12 @@
   "cutButtonLabel": "I-cut",
   "copyButtonLabel": "Kopyahin",
   "pasteButtonLabel": "I-paste",
-  "selectAllButtonLabel": "Piliin Lahat"
+  "selectAllButtonLabel": "Piliin Lahat",
+  "tabSemanticsLabel": "Tab $tabIndex ng $tabCount",
+  "modalBarrierDismissLabel": "I-dismiss",
+  "searchTextFieldPlaceholderLabel": "Hanapin",
+  "noSpellCheckReplacementsLabel": "Walang Nahanap na Kapalit",
+  "menuDismissLabel": "I-dismiss ang menu",
+  "lookUpButtonLabel": "Tumingin sa Itaas",
+  "searchWebButtonLabel": "Search Web"
 }
