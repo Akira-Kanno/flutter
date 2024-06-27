@@ -5,8 +5,6 @@
 import 'base/context.dart';
 
 /// The current [FeatureFlags] implementation.
-///
-/// If not injected, a default implementation is provided.
 FeatureFlags get featureFlags => context.get<FeatureFlags>()!;
 
 /// The interface used to determine if a particular [Feature] is enabled.
@@ -44,8 +42,17 @@ abstract class FeatureFlags {
   /// Whether custom devices are enabled.
   bool get areCustomDevicesEnabled => false;
 
-  /// Whether WebAssembly compilation for Flutter Web is enabled.
-  bool get isFlutterWebWasmEnabled => false;
+  /// Whether animations are used in the command line interface.
+  bool get isCliAnimationEnabled => true;
+
+  /// Whether native assets compilation and bundling is enabled.
+  bool get isNativeAssetsEnabled => false;
+
+  /// Whether native assets compilation and bundling is enabled.
+  bool get isPreviewDeviceEnabled => true;
+
+  /// Whether Swift Package Manager dependency management is enabled.
+  bool get isSwiftPackageManagerEnabled => false;
 
   /// Whether a particular feature is enabled for the current channel.
   ///
@@ -63,7 +70,10 @@ const List<Feature> allFeatures = <Feature>[
   flutterIOSFeature,
   flutterFuchsiaFeature,
   flutterCustomDevicesFeature,
-  flutterWebWasm,
+  cliAnimation,
+  nativeAssets,
+  previewDevice,
+  swiftPackageManager,
 ];
 
 /// All current Flutter feature flags that can be configured.
@@ -122,7 +132,7 @@ const Feature flutterFuchsiaFeature = Feature(
 );
 
 const Feature flutterCustomDevicesFeature = Feature(
-  name: 'Early support for custom device types',
+  name: 'early support for custom device types',
   configSetting: 'enable-custom-devices',
   environmentOverride: 'FLUTTER_CUSTOM_DEVICES',
   master: FeatureChannelSetting(
@@ -136,13 +146,46 @@ const Feature flutterCustomDevicesFeature = Feature(
   ),
 );
 
-/// Enabling WebAssembly compilation from `flutter build web`
-const Feature flutterWebWasm = Feature(
-  name: 'WebAssembly compilation from flutter build web',
-  environmentOverride: 'FLUTTER_WEB_WASM',
+const String kCliAnimationsFeatureName = 'cli-animations';
+
+/// The [Feature] for CLI animations.
+///
+/// The TERM environment variable set to "dumb" turns this off.
+const Feature cliAnimation = Feature.fullyEnabled(
+  name: 'animations in the command line interface',
+  configSetting: kCliAnimationsFeatureName,
+);
+
+/// Enable native assets compilation and bundling.
+const Feature nativeAssets = Feature(
+  name: 'native assets compilation and bundling',
+  configSetting: 'enable-native-assets',
+  environmentOverride: 'FLUTTER_NATIVE_ASSETS',
   master: FeatureChannelSetting(
     available: true,
-    enabledByDefault: true,
+  ),
+);
+
+/// Enable Flutter preview prebuilt device.
+const Feature previewDevice = Feature(
+  name: 'Flutter preview prebuilt device',
+  configSetting: 'enable-flutter-preview',
+  environmentOverride: 'FLUTTER_PREVIEW_DEVICE',
+  master: FeatureChannelSetting(
+    available: true,
+  ),
+  beta: FeatureChannelSetting(
+    available: true,
+  ),
+);
+
+/// Enable Swift Package Mangaer as a darwin dependency manager.
+const Feature swiftPackageManager = Feature(
+  name: 'support for Swift Package Manager for iOS and macOS',
+  configSetting: 'enable-swift-package-manager',
+  environmentOverride: 'SWIFT_PACKAGE_MANAGER',
+  master: FeatureChannelSetting(
+    available: true,
   ),
 );
 
@@ -229,9 +272,9 @@ class Feature {
     ];
     // Add channel info for settings only on some channels.
     if (channels.length == 1) {
-      buffer.write('\nThis setting applies to only the ${channels.single} channel.');
+      buffer.write('\nThis setting applies only to the ${channels.single} channel.');
     } else if (channels.length == 2) {
-      buffer.write('\nThis setting applies to only the ${channels.join(' and ')} channels.');
+      buffer.write('\nThis setting applies only to the ${channels.join(' and ')} channels.');
     }
     if (extraHelpText != null) {
       buffer.write(' $extraHelpText');
@@ -241,15 +284,11 @@ class Feature {
 
   /// Retrieve the correct setting for the provided `channel`.
   FeatureChannelSetting getSettingForChannel(String channel) {
-    switch (channel) {
-      case 'stable':
-        return stable;
-      case 'beta':
-        return beta;
-      case 'master':
-      default:
-        return master;
-    }
+    return switch (channel) {
+      'stable' => stable,
+      'beta' => beta,
+      'master' || _ => master,
+    };
   }
 }
 

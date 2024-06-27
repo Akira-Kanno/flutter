@@ -36,12 +36,14 @@ import 'src/picture_cache.dart';
 import 'src/picture_cache_complexity_scoring.dart';
 import 'src/post_backdrop_filter.dart';
 import 'src/raster_cache_use_memory.dart';
+import 'src/rrect_blur.dart' show RRectBlur;
 import 'src/shader_mask_cache.dart';
 import 'src/simple_animation.dart';
 import 'src/simple_scroll.dart';
 import 'src/sliders.dart';
 import 'src/stack_size.dart';
 import 'src/text.dart';
+import 'src/very_long_picture_scrolling.dart';
 
 const String kMacrobenchmarks = 'Macrobenchmarks';
 
@@ -97,6 +99,8 @@ class MacrobenchmarksApp extends StatelessWidget {
         kDrawVerticesPageRouteName: (BuildContext context) => const DrawVerticesPage(),
         kDrawAtlasPageRouteName: (BuildContext context) => const DrawAtlasPage(),
         kAnimatedAdvancedBlend: (BuildContext context) => const AnimatedAdvancedBlend(),
+        kRRectBlurRouteName: (BuildContext context) => const RRectBlur(),
+        kVeryLongPictureScrollingRouteName: (BuildContext context) => const VeryLongPictureScrollingPerf(),
       },
     );
   }
@@ -371,6 +375,20 @@ class HomePage extends StatelessWidget {
             child: const Text('Animated Advanced Blend'),
             onPressed: () {
               Navigator.pushNamed(context, kAnimatedAdvancedBlend);
+            },
+          ),
+          ElevatedButton(
+            key: const Key(kRRectBlurRouteName),
+            child: const Text('Rounded Rect Blur'),
+            onPressed: () {
+              Navigator.pushNamed(context, kRRectBlurRouteName);
+            },
+          ),
+          ElevatedButton(
+            key: const Key(kVeryLongPictureScrollingRouteName),
+            child: const Text('Very Long Picture Scrolling'),
+            onPressed: () {
+              Navigator.pushNamed(context, kVeryLongPictureScrollingRouteName);
             },
           ),
         ],

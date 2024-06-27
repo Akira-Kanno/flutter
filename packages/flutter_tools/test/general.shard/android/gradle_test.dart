@@ -198,7 +198,7 @@ void main() {
       expect(() {
         gradle_utils.updateLocalProperties(project: FlutterProject.fromDirectoryTest(globals.fs.currentDirectory));
       }, throwsToolExit(
-        message: '${globals.logger.terminal.warningMark} No Android SDK found. Try setting the ANDROID_SDK_ROOT environment variable.',
+        message: '${globals.logger.terminal.warningMark} No Android SDK found. Try setting the ANDROID_HOME environment variable.',
       ));
     }, overrides: <Type, Generator>{
       AndroidSdk: () => null,
@@ -572,7 +572,7 @@ flutter:
           '      }\n'
           '    }\n'
           '\n'
-          'To learn more, visit https://flutter.dev/go/build-aar\n'
+          'To learn more, visit https://flutter.dev/to/integrate-android-archive\n'
         )
       );
     });
@@ -610,7 +610,7 @@ flutter:
           "      releaseImplementation 'com.mycompany:flutter_release:1.0'\n"
           '    }\n'
           '\n'
-          'To learn more, visit https://flutter.dev/go/build-aar\n'
+          'To learn more, visit https://flutter.dev/to/integrate-android-archive\n'
         )
       );
     });
@@ -648,7 +648,7 @@ flutter:
           "      debugImplementation 'com.mycompany:flutter_debug:1.0'\n"
           '    }\n'
           '\n'
-          'To learn more, visit https://flutter.dev/go/build-aar\n'
+          'To learn more, visit https://flutter.dev/to/integrate-android-archive\n'
         )
       );
     });
@@ -698,7 +698,7 @@ flutter:
           '      }\n'
           '    }\n'
           '\n'
-          'To learn more, visit https://flutter.dev/go/build-aar\n'
+          'To learn more, visit https://flutter.dev/to/integrate-android-archive\n'
         )
       );
     });

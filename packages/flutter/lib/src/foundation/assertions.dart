@@ -48,8 +48,7 @@ typedef StackTraceDemangler = StackTrace Function(StackTrace details);
 ///  * [RepetitiveStackFrameFilter], which uses this class to compare against [StackFrame]s.
 @immutable
 class PartialStackFrame {
-  /// Creates a new [PartialStackFrame] instance. All arguments are required and
-  /// must not be null.
+  /// Creates a new [PartialStackFrame] instance.
   const PartialStackFrame({
     required this.package,
     required this.className,
@@ -397,9 +396,6 @@ class FlutterErrorDetails with Diagnosticable {
   ///
   /// The framework calls this constructor when catching an exception that will
   /// subsequently be reported using [FlutterError.onError].
-  ///
-  /// The [exception] must not be null; other arguments can be left to
-  /// their default values.
   const FlutterErrorDetails({
     required this.exception,
     this.stack,
@@ -762,7 +758,7 @@ class FlutterErrorDetails with Diagnosticable {
 ///
 /// See also:
 ///
-///  * <https://flutter.dev/docs/testing/errors>, more information about error
+///  * <https://docs.flutter.dev/testing/errors>, more information about error
 ///    handling in Flutter.
 class FlutterError extends Error with DiagnosticableTreeMixin implements AssertionError {
   /// Create an error message from a string.
@@ -929,7 +925,7 @@ class FlutterError extends Error with DiagnosticableTreeMixin implements Asserti
   ///
   /// See also:
   ///
-  ///  * <https://flutter.dev/docs/testing/errors>, more information about error
+  ///  * <https://docs.flutter.dev/testing/errors>, more information about error
   ///    handling in Flutter.
   static FlutterExceptionHandler? onError = presentError;
 

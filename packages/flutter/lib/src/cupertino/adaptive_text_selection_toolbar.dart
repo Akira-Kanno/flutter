@@ -96,6 +96,7 @@ class CupertinoAdaptiveTextSelectionToolbar extends StatelessWidget {
     required VoidCallback? onSelectAll,
     required VoidCallback? onLookUp,
     required VoidCallback? onSearchWeb,
+    required VoidCallback? onShare,
     required VoidCallback? onLiveTextInput,
     required this.anchors,
   }) : children = null,
@@ -107,6 +108,7 @@ class CupertinoAdaptiveTextSelectionToolbar extends StatelessWidget {
          onSelectAll: onSelectAll,
          onLookUp: onLookUp,
          onSearchWeb: onSearchWeb,
+         onShare: onShare,
          onLiveTextInput: onLiveTextInput
        );
 
@@ -150,6 +152,7 @@ class CupertinoAdaptiveTextSelectionToolbar extends StatelessWidget {
          selectionGeometry: selectionGeometry,
          onCopy: onCopy,
          onSelectAll: onSelectAll,
+         onShare: null, // See https://github.com/flutter/flutter/issues/141775.
        );
 
   /// {@macro flutter.material.AdaptiveTextSelectionToolbar.anchors}

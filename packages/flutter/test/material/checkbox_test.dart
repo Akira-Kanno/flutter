@@ -73,11 +73,12 @@ void main() {
       ),
     ));
 
-    expect(tester.getSemantics(find.byType(Focus)), matchesSemantics(
+    expect(tester.getSemantics(find.byType(Focus).last), matchesSemantics(
       hasCheckedState: true,
       hasEnabledState: true,
       isEnabled: true,
       hasTapAction: true,
+      hasFocusAction: true,
       isFocusable: true,
     ));
 
@@ -91,12 +92,13 @@ void main() {
       ),
     ));
 
-    expect(tester.getSemantics(find.byType(Focus)), matchesSemantics(
+    expect(tester.getSemantics(find.byType(Focus).last), matchesSemantics(
       hasCheckedState: true,
       hasEnabledState: true,
       isChecked: true,
       isEnabled: true,
       hasTapAction: true,
+      hasFocusAction: true,
       isFocusable: true,
     ));
 
@@ -115,6 +117,7 @@ void main() {
       hasEnabledState: true,
       // isFocusable is delayed by 1 frame.
       isFocusable: true,
+      hasFocusAction: true,
     ));
 
     await tester.pump();
@@ -205,7 +208,7 @@ void main() {
       ),
     ));
 
-    expect(tester.getSemantics(find.byType(Focus)), matchesSemantics(
+    expect(tester.getSemantics(find.byType(Focus).last), matchesSemantics(
       label: 'checkbox',
       textDirection: TextDirection.ltr,
       hasCheckedState: true,
@@ -213,6 +216,7 @@ void main() {
       isChecked: true,
       isEnabled: true,
       hasTapAction: true,
+      hasFocusAction: true,
       isFocusable: true,
     ));
     handle.dispose();
@@ -242,6 +246,7 @@ void main() {
       hasEnabledState: true,
       isEnabled: true,
       hasTapAction: true,
+      hasFocusAction: true,
       isFocusable: true,
     ));
     handle.dispose();
@@ -317,7 +322,7 @@ void main() {
         SemanticsFlag.isFocusable,
         SemanticsFlag.isCheckStateMixed,
       ],
-      actions: <SemanticsAction>[SemanticsAction.tap],
+      actions: <SemanticsAction>[SemanticsAction.tap, SemanticsAction.focus],
     ), hasLength(1));
 
     await tester.pumpWidget(
@@ -341,7 +346,7 @@ void main() {
         SemanticsFlag.isChecked,
         SemanticsFlag.isFocusable,
       ],
-      actions: <SemanticsAction>[SemanticsAction.tap],
+      actions: <SemanticsAction>[SemanticsAction.tap, SemanticsAction.focus],
     ), hasLength(1));
 
     await tester.pumpWidget(
@@ -364,7 +369,7 @@ void main() {
         SemanticsFlag.isEnabled,
         SemanticsFlag.isFocusable,
       ],
-      actions: <SemanticsAction>[SemanticsAction.tap],
+      actions: <SemanticsAction>[SemanticsAction.tap, SemanticsAction.focus],
     ), hasLength(1));
 
     semantics.dispose();
@@ -643,6 +648,7 @@ void main() {
 
   testWidgets('Material2 - Checkbox is focusable and has correct focus color', (WidgetTester tester) async {
     final FocusNode focusNode = FocusNode(debugLabel: 'Checkbox');
+    addTearDown(focusNode.dispose);
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
     bool? value = true;
     Widget buildApp({bool enabled = true}) {
@@ -713,6 +719,7 @@ void main() {
 
   testWidgets('Material3 - Checkbox is focusable and has correct focus color', (WidgetTester tester) async {
     final FocusNode focusNode = FocusNode(debugLabel: 'Checkbox');
+    addTearDown(focusNode.dispose);
     final ThemeData theme = ThemeData(useMaterial3: true);
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
     bool? value = true;
@@ -832,7 +839,7 @@ void main() {
     final Offset checkboxTopLeftGlobal = tester.getTopLeft(find.byType(Checkbox));
     final Offset checkboxCenterGlobal = tester.getCenter(find.byType(Checkbox));
     final Offset checkboxCenterLocal = checkboxCenterGlobal - checkboxTopLeftGlobal;
-    await tester.startGesture(checkboxTopLeftGlobal);
+    final TestGesture gesture = await tester.startGesture(checkboxTopLeftGlobal);
     await tester.pump();
     // Wait for the splash to be drawn, but not long enough for it to animate towards the center, since
     // we want to catch it in its starting position.
@@ -841,6 +848,10 @@ void main() {
       Material.of(tester.element(find.byType(Checkbox))),
       paints..circle(x: checkboxCenterLocal.dx, y: checkboxCenterLocal.dy),
     );
+
+    // Finish gesture to release resources.
+    await gesture.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('Material2 - Checkbox can be hovered and has correct hover color', (WidgetTester tester) async {
@@ -878,6 +889,7 @@ void main() {
 
     // Start hovering
     final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(gesture.removePointer);
     await gesture.moveTo(tester.getCenter(find.byType(Checkbox)));
 
     await tester.pumpWidget(buildApp());
@@ -885,6 +897,7 @@ void main() {
     expect(
       Material.of(tester.element(find.byType(Checkbox))),
       paints
+        ..circle(color: Colors.orange[500])
         ..path(color: const Color(0xff2196f3))
         ..path(color: const Color(0xffffffff), style: PaintingStyle.stroke, strokeWidth: 2.0),
     );
@@ -935,6 +948,7 @@ void main() {
 
     // Start hovering
     final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(gesture.removePointer);
     await gesture.moveTo(tester.getCenter(find.byType(Checkbox)));
 
     await tester.pumpWidget(buildApp());
@@ -942,6 +956,7 @@ void main() {
     expect(
       Material.of(tester.element(find.byType(Checkbox))),
       paints
+        ..circle(color: Colors.orange[500])
         ..path(color: const Color(0xff6750a4))
         ..path(color: theme.colorScheme.onPrimary, style: PaintingStyle.stroke, strokeWidth: 2.0),
     );
@@ -985,7 +1000,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    // On web, switches don't respond to the enter key.
+    // On web, checkboxes don't respond to the enter key.
     expect(value, kIsWeb ? isTrue : isFalse);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
@@ -1115,6 +1130,7 @@ void main() {
 
     final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse, pointer: 1);
     await gesture.addPointer(location: tester.getCenter(find.byType(Checkbox)));
+    addTearDown(gesture.removePointer);
 
     await tester.pump();
 
@@ -1241,6 +1257,8 @@ void main() {
 
   testWidgets('Checkbox fill color resolves in hovered/focused states', (WidgetTester tester) async {
     final FocusNode focusNode = FocusNode(debugLabel: 'checkbox');
+    addTearDown(focusNode.dispose);
+
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
     const Color hoveredFillColor = Color(0xFF000001);
     const Color focusedFillColor = Color(0xFF000002);
@@ -1289,6 +1307,7 @@ void main() {
     // Start hovering
     final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer();
+    addTearDown(gesture.removePointer);
     await gesture.moveTo(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
@@ -1340,6 +1359,7 @@ void main() {
 
   testWidgets('Material2 - Checkbox default overlay color in active/pressed/focused/hovered states', (WidgetTester tester) async {
     final FocusNode focusNode = FocusNode(debugLabel: 'Checkbox');
+    addTearDown(focusNode.dispose);
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
 
     final ThemeData theme = ThemeData(useMaterial3: false);
@@ -1359,7 +1379,7 @@ void main() {
     }
 
     await tester.pumpWidget(buildCheckbox());
-    await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture1 = await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
@@ -1370,7 +1390,7 @@ void main() {
     );
 
     await tester.pumpWidget(buildCheckbox(active: true));
-    await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture2 = await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
@@ -1393,9 +1413,10 @@ void main() {
 
     await tester.pumpWidget(Container()); // reset test
     await tester.pumpWidget(buildCheckbox());
-    final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer();
-    await gesture.moveTo(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture3 = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture3.addPointer();
+    addTearDown(gesture3.removePointer);
+    await gesture3.moveTo(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
@@ -1403,10 +1424,16 @@ void main() {
       paints..circle(color: theme.hoverColor),
       reason: 'Hovered Checkbox should use default hovered overlay color',
     );
+
+    // Finish gestures to release resources.
+    await gesture1.up();
+    await gesture2.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('Material3 - Checkbox default overlay color in active/pressed/focused/hovered states', (WidgetTester tester) async {
     final FocusNode focusNode = FocusNode(debugLabel: 'Checkbox');
+    addTearDown(focusNode.dispose);
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
 
     final ThemeData theme = ThemeData(useMaterial3: true);
@@ -1426,22 +1453,22 @@ void main() {
     }
 
     await tester.pumpWidget(buildCheckbox());
-    await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture1 = await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
       Material.of(tester.element(find.byType(Checkbox))),
-      paints..circle(color: colors.primary.withOpacity(0.12)),
+      paints..circle(color: colors.primary.withOpacity(0.1)),
       reason: 'Default inactive pressed Checkbox should have overlay color from default fillColor',
     );
 
     await tester.pumpWidget(buildCheckbox(active: true));
-    await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture2 = await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
       Material.of(tester.element(find.byType(Checkbox))),
-      paints..circle(color: colors.onSurface.withOpacity(0.12)),
+      paints..circle(color: colors.onSurface.withOpacity(0.1)),
       reason: 'Default active pressed Checkbox should have overlay color from default fillColor',
     );
 
@@ -1452,15 +1479,16 @@ void main() {
     expect(focusNode.hasPrimaryFocus, isTrue);
     expect(
       Material.of(tester.element(find.byType(Checkbox))),
-      paints..circle(color: colors.onSurface.withOpacity(0.12)),
+      paints..circle(color: colors.onSurface.withOpacity(0.1)),
       reason: 'Focused Checkbox should use default focused overlay color',
     );
 
     await tester.pumpWidget(Container()); // reset test
     await tester.pumpWidget(buildCheckbox());
-    final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer();
-    await gesture.moveTo(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture3 = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture3.addPointer();
+    addTearDown(gesture3.removePointer);
+    await gesture3.moveTo(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
@@ -1468,10 +1496,16 @@ void main() {
       paints..circle(color: colors.onSurface.withOpacity(0.08)),
       reason: 'Hovered Checkbox should use default hovered overlay color',
     );
+
+    // Finish gestures to release resources.
+    await gesture1.up();
+    await gesture2.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('Checkbox overlay color resolves in active/pressed/focused/hovered states', (WidgetTester tester) async {
     final FocusNode focusNode = FocusNode(debugLabel: 'Checkbox');
+    addTearDown(focusNode.dispose);
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
 
     const Color fillColor = Color(0xFF000000);
@@ -1519,7 +1553,7 @@ void main() {
     }
 
     await tester.pumpWidget(buildCheckbox(useOverlay: false));
-    await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture1 = await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
@@ -1533,7 +1567,7 @@ void main() {
     );
 
     await tester.pumpWidget(buildCheckbox(active: true, useOverlay: false));
-    await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture2 = await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
@@ -1547,7 +1581,7 @@ void main() {
     );
 
     await tester.pumpWidget(buildCheckbox());
-    await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture3 = await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
@@ -1561,7 +1595,7 @@ void main() {
     );
 
     await tester.pumpWidget(buildCheckbox(active: true));
-    await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture4 = await tester.startGesture(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
@@ -1590,9 +1624,10 @@ void main() {
     );
 
     // Start hovering
-    final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer();
-    await gesture.moveTo(tester.getCenter(find.byType(Checkbox)));
+    final TestGesture gesture5 = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture5.addPointer();
+    addTearDown(gesture5.removePointer);
+    await gesture5.moveTo(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
     expect(
@@ -1604,6 +1639,13 @@ void main() {
         ),
       reason: 'Hovered Checkbox should use overlay color $hoverOverlayColor over $hoverColor',
     );
+
+    // Finish gestures to release resources.
+    await gesture1.up();
+    await gesture2.up();
+    await gesture3.up();
+    await gesture4.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('Tristate Checkbox overlay color resolves in pressed active/inactive states', (WidgetTester tester) async {
@@ -1965,6 +2007,7 @@ void main() {
 
   testWidgets('Material3 - Checkbox has default error color when isError is set to true', (WidgetTester tester) async {
     final FocusNode focusNode = FocusNode(debugLabel: 'Checkbox');
+    addTearDown(focusNode.dispose);
     final ThemeData themeData = ThemeData(useMaterial3: true);
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
     bool? value = true;
@@ -1996,7 +2039,7 @@ void main() {
     expect(focusNode.hasPrimaryFocus, isTrue);
     expect(
       Material.of(tester.element(find.byType(Checkbox))),
-      paints..circle(color: themeData.colorScheme.error.withOpacity(0.12))..path(color: themeData.colorScheme.error)..path(color: themeData.colorScheme.onError)
+      paints..circle(color: themeData.colorScheme.error.withOpacity(0.1))..path(color: themeData.colorScheme.error)..path(color: themeData.colorScheme.onError)
     );
 
     // Default color
@@ -2012,6 +2055,7 @@ void main() {
     // Start hovering
     final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer();
+    addTearDown(gesture.removePointer);
     await gesture.moveTo(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
 
@@ -2028,7 +2072,7 @@ void main() {
     expect(
       Material.of(tester.element(find.byType(Checkbox))),
       paints
-        ..circle(color: themeData.colorScheme.error.withOpacity(0.12))
+        ..circle(color: themeData.colorScheme.error.withOpacity(0.1))
         ..path(color: themeData.colorScheme.error)
     );
     await gestureLongPress.up();
@@ -2037,6 +2081,7 @@ void main() {
 
   testWidgets('Material3 - Checkbox MaterialStateBorderSide applies in error states', (WidgetTester tester) async {
     final FocusNode focusNode = FocusNode(debugLabel: 'Checkbox');
+    addTearDown(focusNode.dispose);
     final ThemeData themeData = ThemeData(useMaterial3: true);
     const Color borderColor = Color(0xffffeb3b);
     tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
@@ -2102,6 +2147,7 @@ void main() {
     // Start hovering
     final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer();
+    addTearDown(gesture.removePointer);
     await gesture.moveTo(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
     expectBorder();

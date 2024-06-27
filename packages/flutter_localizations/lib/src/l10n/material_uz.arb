@@ -143,5 +143,8 @@
   "collapsedHint": "Yoyilgan",
   "menuDismissLabel": "Menyuni yopish",
   "lookUpButtonLabel": "Tepaga qarang",
-  "searchWebButtonLabel": "Search Web"
+  "searchWebButtonLabel": "Internetdan qidirish",
+  "shareButtonLabel": "Ulashish…",
+  "clearButtonTooltip": "Clear text",
+  "selectedDateLabel": "Selected"
 }

@@ -12,7 +12,6 @@ import 'package:flutter_tools/src/base/error_handling_io.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/platform.dart';
-import 'package:path/path.dart' as p; // flutter_ignore: package_path_import
 import 'package:process/process.dart';
 import 'package:test/fake.dart';
 
@@ -99,6 +98,24 @@ void main() {
     }, throwsFileSystemException());
   });
 
+  testWithoutContext('deleteIfExists throws tool exit if the path is not found on Windows', () {
+    final FileExceptionHandler exceptionHandler = FileExceptionHandler();
+    final ErrorHandlingFileSystem fileSystem = ErrorHandlingFileSystem(
+      delegate: MemoryFileSystem.test(opHandle: exceptionHandler.opHandle),
+      platform: windowsPlatform,
+    );
+    final File file = fileSystem.file(fileSystem.path.join('directory', 'file'))
+      ..createSync(recursive: true);
+
+    exceptionHandler.addError(
+      file,
+      FileSystemOp.delete,
+      FileSystemException('', file.path, const OSError('', 2)),
+    );
+
+    expect(() => ErrorHandlingFileSystem.deleteIfExists(file), throwsToolExit());
+  });
+
   group('throws ToolExit on Windows', () {
     const int kDeviceFull = 112;
     const int kUserMappedSectionOpened = 1224;
@@ -112,7 +129,7 @@ void main() {
       exceptionHandler = FileExceptionHandler();
     });
 
-    testWithoutContext('bypasses error handling when withAllowedFailure is used', () {
+    testWithoutContext('bypasses error handling when noExitOnFailure is used', () {
       final ErrorHandlingFileSystem fileSystem = ErrorHandlingFileSystem(
         delegate: MemoryFileSystem.test(opHandle: exceptionHandler.opHandle),
         platform: windowsPlatform,
@@ -124,9 +141,9 @@ void main() {
         FileSystemOp.write,
         FileSystemException('', file.path, const OSError('', kUserPermissionDenied)),
       );
-
+      final Matcher throwsNonToolExit = throwsA(isNot(isA<ToolExit>()));
       expect(() => ErrorHandlingFileSystem.noExitOnFailure(
-        () => file.writeAsStringSync('')), throwsException);
+        () => file.writeAsStringSync('')), throwsNonToolExit);
 
       // nesting does not unconditionally re-enable errors.
       expect(() {
@@ -134,7 +151,7 @@ void main() {
           ErrorHandlingFileSystem.noExitOnFailure(() { });
           file.writeAsStringSync('');
         });
-      }, throwsException);
+      }, throwsNonToolExit);
 
       // Check that state does not leak.
       expect(() => file.writeAsStringSync(''), throwsToolExit());
@@ -572,14 +589,14 @@ void main() {
 
     testWithoutContext('When the current working directory disappears', () async {
      final ErrorHandlingFileSystem fileSystem = ErrorHandlingFileSystem(
-        delegate: ThrowsOnCurrentDirectoryFileSystem(kSystemCannotFindFile),
+        delegate: ThrowsOnCurrentDirectoryFileSystem(kSystemCodeCannotFindFile),
         platform: linuxPlatform,
       );
 
       expect(() => fileSystem.currentDirectory, throwsToolExit(message: 'Unable to read current working directory'));
     });
 
-    testWithoutContext('Rethrows os error $kSystemCannotFindFile', () {
+    testWithoutContext('Rethrows os error $kSystemCodeCannotFindFile', () {
        final ErrorHandlingFileSystem fileSystem = ErrorHandlingFileSystem(
         delegate: MemoryFileSystem.test(opHandle: exceptionHandler.opHandle),
         platform: linuxPlatform,
@@ -589,11 +606,11 @@ void main() {
       exceptionHandler.addError(
         file,
         FileSystemOp.read,
-        FileSystemException('', file.path, const OSError('', kSystemCannotFindFile)),
+        FileSystemException('', file.path, const OSError('', kSystemCodeCannotFindFile)),
       );
 
       // Error is not caught by other operations.
-      expect(() => fileSystem.file('foo').readAsStringSync(), throwsFileSystemException(kSystemCannotFindFile));
+      expect(() => fileSystem.file('foo').readAsStringSync(), throwsFileSystemException(kSystemCodeCannotFindFile));
     });
   });
 
@@ -1293,7 +1310,7 @@ class FakeExistsFile extends Fake implements File {
 
 class FakeFileSystem extends Fake implements FileSystem {
   @override
-  p.Context get path => p.Context();
+  Context get path => Context();
 
   @override
   Directory get currentDirectory {

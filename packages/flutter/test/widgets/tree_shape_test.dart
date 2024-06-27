@@ -7,13 +7,16 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
+
+import 'multi_view_testing.dart';
 
 void main() {
   testWidgets('Providing a RenderObjectWidget directly to the RootWidget fails', (WidgetTester tester) async {
     // No render tree exists to attach the RenderObjectWidget to.
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: const ColoredBox(color: Colors.red),
+    await tester.pumpWidget(
+      wrapWithView: false,
+      const ColoredBox(color: Colors.red),
     );
 
     expect(tester.takeException(), isFlutterError.having(
@@ -29,18 +32,18 @@ void main() {
       color: Colors.red,
     );
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: View(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      View(
         view: tester.view,
         child: globalKeyedWidget,
       ),
     );
     expect(tester.takeException(), isNull);
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: globalKeyedWidget,
+    await tester.pumpWidget(
+      wrapWithView: false,
+      globalKeyedWidget,
     );
 
     expect(tester.takeException(), isFlutterError.having(
@@ -50,7 +53,9 @@ void main() {
     ));
   });
 
-  testWidgets('A View cannot be a child of a render object widget', (WidgetTester tester) async {
+  testWidgets('A View cannot be a child of a render object widget',
+  experimentalLeakTesting: LeakTesting.settings.withIgnoredAll(), // leaking by design because of exception
+  (WidgetTester tester) async {
     await tester.pumpWidget(Center(
       child: View(
         view: FakeView(tester.view),
@@ -65,7 +70,9 @@ void main() {
     ));
   });
 
-  testWidgets('The child of a ViewAnchor cannot be a View', (WidgetTester tester) async {
+  testWidgets('The child of a ViewAnchor cannot be a View',
+  experimentalLeakTesting: LeakTesting.settings.withIgnoredAll(), // leaking by design because of exception
+  (WidgetTester tester) async {
     await tester.pumpWidget(
       ViewAnchor(
         child: View(
@@ -89,15 +96,15 @@ void main() {
       child: const ColoredBox(color: Colors.red),
     );
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: globalKeyedView,
+    await tester.pumpWidget(
+      wrapWithView: false,
+      globalKeyedView,
     );
     expect(tester.takeException(), isNull);
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: View(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      View(
         view: tester.view,
         child: globalKeyedView,
       ),
@@ -153,9 +160,9 @@ void main() {
   });
 
   testWidgets('ViewAnchor cannot be used at the top of the widget tree (outside of View)', (WidgetTester tester) async {
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: const ViewAnchor(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      const ViewAnchor(
         child: SizedBox(),
       ),
     );
@@ -173,18 +180,18 @@ void main() {
       child: const SizedBox(),
     );
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: View(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      View(
         view: tester.view,
         child: globalKeyedViewAnchor,
       ),
     );
     expect(tester.takeException(), isNull);
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: globalKeyedViewAnchor,
+    await tester.pumpWidget(
+      wrapWithView: false,
+      globalKeyedViewAnchor,
     );
 
     expect(tester.takeException(), isFlutterError.having(
@@ -195,9 +202,9 @@ void main() {
   });
 
   testWidgets('View can be used at the top of the widget tree', (WidgetTester tester) async {
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: View(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      View(
         view: tester.view,
         child: Container(),
       ),
@@ -212,9 +219,9 @@ void main() {
       child: const ColoredBox(color: Colors.red),
     );
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: View(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      View(
         view: tester.view,
         child: ViewAnchor(
           view: globalKeyView, // This one has trouble when deactivating
@@ -226,9 +233,9 @@ void main() {
     expect(find.byType(SizedBox), findsOneWidget);
     expect(find.byType(ColoredBox), findsOneWidget);
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: globalKeyView,
+    await tester.pumpWidget(
+      wrapWithView: false,
+      globalKeyView,
     );
     expect(tester.takeException(), isNull);
     expect(find.byType(SizedBox), findsNothing);
@@ -236,9 +243,9 @@ void main() {
   });
 
   testWidgets('ViewCollection can be used at the top of the widget tree', (WidgetTester tester) async {
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             view: tester.view,
@@ -289,10 +296,10 @@ void main() {
   });
 
   testWidgets('ViewCollection cannot have render object widgets as children', (WidgetTester tester) async {
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
-        views: const <Widget>[
+    await tester.pumpWidget(
+      wrapWithView: false,
+      const ViewCollection(
+        views: <Widget>[
           ColoredBox(color: Colors.red),
         ],
       ),
@@ -317,9 +324,9 @@ void main() {
       child: const ColoredBox(color: Colors.red),
     );
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           greenView,
           ViewCollection(
@@ -333,9 +340,9 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byType(ColoredBox), findsNWidgets(2));
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
           views: <Widget>[
             redView,
             ViewCollection(
@@ -369,9 +376,9 @@ void main() {
       return result;
     }
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             view: greenView,
@@ -410,9 +417,9 @@ void main() {
     expect(leafRenderObject[redView.viewId], isNot(isA<RenderConstrainedBox>()));
 
     // Move the child.
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             view: greenView,
@@ -474,9 +481,9 @@ void main() {
       return result;
     }
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             view: greenView,
@@ -515,9 +522,9 @@ void main() {
     expect(leafRenderObject[greenView.viewId], isNot(isA<RenderConstrainedBox>()));
 
     // Move the child.
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             view: greenView,
@@ -569,9 +576,9 @@ void main() {
       key: GlobalKey(),
     );
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             key: greenKey,
@@ -608,9 +615,9 @@ void main() {
     final RenderObject boxWithGlobalKey = tester.renderObject(find.byKey(globalKeyChild.key!));
 
     // Move the child and remove its view.
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             key: greenKey,
@@ -650,9 +657,9 @@ void main() {
       key: GlobalKey(),
     );
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             key: greenKey,
@@ -689,9 +696,9 @@ void main() {
     final RenderObject boxWithGlobalKey = tester.renderObject(find.byKey(globalKeyChild.key!));
 
     // Move the child and remove its view.
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             key: redKey,
@@ -1007,9 +1014,9 @@ void main() {
     final FlutterView redView = tester.view;
     final FlutterView greenView = FakeView(tester.view);
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             view: redView,
@@ -1027,9 +1034,9 @@ void main() {
     expect(findsColoredBox(Colors.red), findsOneWidget);
     final RenderObject box = tester.renderObject(findsColoredBox(Colors.green));
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           View(
             view: redView,
@@ -1050,17 +1057,17 @@ void main() {
       child: const SizedBox(),
     );
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: view,
+    await tester.pumpWidget(
+      wrapWithView: false,
+      view,
     );
 
     final RenderObject renderView = tester.renderObject(find.byType(View));
     final RenderObject renderSizedBox = tester.renderObject(find.byType(SizedBox));
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[view],
       ),
     );
@@ -1068,9 +1075,9 @@ void main() {
     expect(tester.renderObject(find.byType(View)), same(renderView));
     expect(tester.renderObject(find.byType(SizedBox)), same(renderSizedBox));
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: view,
+    await tester.pumpWidget(
+      wrapWithView: false,
+      view,
     );
 
     expect(tester.renderObject(find.byType(View)), same(renderView));
@@ -1112,9 +1119,9 @@ void main() {
         child: const SizedBox(),
       )
     );
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: view,
+    await tester.pumpWidget(
+      wrapWithView: false,
+      view,
     );
 
     final RenderObject renderSemantics = tester.renderObject(find.bySemanticsLabel('Hello'));
@@ -1122,9 +1129,9 @@ void main() {
     expect(semantics.id, 1);
     expect(renderSemantics.debugSemantics, same(semantics));
 
-    await pumpWidgetWithoutViewWrapper(
-      tester: tester,
-      widget: ViewCollection(
+    await tester.pumpWidget(
+      wrapWithView: false,
+      ViewCollection(
         views: <Widget>[
           view,
         ],
@@ -1141,21 +1148,4 @@ void main() {
 
 Finder findsColoredBox(Color color) {
   return find.byWidgetPredicate((Widget widget) => widget is ColoredBox && widget.color == color);
-}
-
-Future<void> pumpWidgetWithoutViewWrapper({required WidgetTester tester, required  Widget widget}) {
-  tester.binding.attachRootWidget(widget);
-  tester.binding.scheduleFrame();
-  return tester.binding.pump();
-}
-
-class FakeView extends TestFlutterView{
-  FakeView(FlutterView view, { this.viewId = 100 }) : super(
-    view: view,
-    platformDispatcher: view.platformDispatcher as TestPlatformDispatcher,
-    display: view.display as TestDisplay,
-  );
-
-  @override
-  final int viewId;
 }

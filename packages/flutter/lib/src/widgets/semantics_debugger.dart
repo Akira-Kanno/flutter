@@ -21,8 +21,6 @@ import 'view.dart';
 class SemanticsDebugger extends StatefulWidget {
   /// Creates a widget that visualizes the semantics for the child.
   ///
-  /// The [child] argument must not be null.
-  ///
   /// [labelStyle] dictates the [TextStyle] used for the semantics labels.
   const SemanticsDebugger({
     super.key,
@@ -47,31 +45,33 @@ class SemanticsDebugger extends StatefulWidget {
 }
 
 class _SemanticsDebuggerState extends State<SemanticsDebugger> with WidgetsBindingObserver {
-  _SemanticsClient? _client;
   PipelineOwner? _pipelineOwner;
+  SemanticsHandle? _semanticsHandle;
+  int _generation = 0;
 
   @override
   void initState() {
     super.initState();
+    _semanticsHandle = SemanticsBinding.instance.ensureSemantics();
     WidgetsBinding.instance.addObserver(this);
   }
 
   @override
-  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final PipelineOwner newOwner = View.pipelineOwnerOf(context);
+    assert(newOwner.semanticsOwner != null);
     if (newOwner != _pipelineOwner) {
-      _client?.dispose();
-      _client = _SemanticsClient(newOwner)
-        ..addListener(_update);
+      _pipelineOwner?.semanticsOwner?.removeListener(_update);
+      newOwner.semanticsOwner!.addListener(_update);
       _pipelineOwner = newOwner;
     }
   }
 
   @override
   void dispose() {
-    _client?.dispose();
+    _pipelineOwner?.semanticsOwner?.removeListener(_update);
+    _semanticsHandle?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -84,6 +84,7 @@ class _SemanticsDebuggerState extends State<SemanticsDebugger> with WidgetsBindi
   }
 
   void _update() {
+    _generation++;
     SchedulerBinding.instance.addPostFrameCallback((Duration timeStamp) {
       // Semantic information are only available at the end of a frame and our
       // only chance to paint them on the screen is the next frame. To achieve
@@ -96,7 +97,7 @@ class _SemanticsDebuggerState extends State<SemanticsDebugger> with WidgetsBindi
           // The generation of the _SemanticsDebuggerListener has changed.
         });
       }
-    });
+    }, debugLabel: 'SemanticsDebugger.update');
   }
 
   Offset? _lastPointerDownLocation;
@@ -159,7 +160,7 @@ class _SemanticsDebuggerState extends State<SemanticsDebugger> with WidgetsBindi
     return CustomPaint(
       foregroundPainter: _SemanticsDebuggerPainter(
         _pipelineOwner!,
-        _client!.generation,
+        _generation,
         _lastPointerDownLocation, // in physical pixels
         View.of(context).devicePixelRatio,
         widget.labelStyle,
@@ -179,30 +180,6 @@ class _SemanticsDebuggerState extends State<SemanticsDebugger> with WidgetsBindi
         ),
       ),
     );
-  }
-}
-
-class _SemanticsClient extends ChangeNotifier {
-  _SemanticsClient(PipelineOwner pipelineOwner) {
-    _semanticsHandle = pipelineOwner.ensureSemantics(
-      listener: _didUpdateSemantics,
-    );
-  }
-
-  SemanticsHandle? _semanticsHandle;
-
-  @override
-  void dispose() {
-    _semanticsHandle!.dispose();
-    _semanticsHandle = null;
-    super.dispose();
-  }
-
-  int generation = 0;
-
-  void _didUpdateSemantics() {
-    generation += 1;
-    notifyListeners();
   }
 }
 
@@ -306,12 +283,10 @@ class _SemanticsDebuggerPainter extends CustomPainter {
         effectivelabel = '${Unicode.FSI}$tooltipAndLabel${Unicode.PDI}';
         annotations.insert(0, 'MISSING TEXT DIRECTION');
       } else {
-        switch (data.textDirection!) {
-          case TextDirection.rtl:
-            effectivelabel = '${Unicode.RLI}$tooltipAndLabel${Unicode.PDF}';
-          case TextDirection.ltr:
-            effectivelabel = tooltipAndLabel;
-        }
+        effectivelabel = switch (data.textDirection!) {
+          TextDirection.rtl => '${Unicode.RLI}$tooltipAndLabel${Unicode.PDI}',
+          TextDirection.ltr => tooltipAndLabel,
+        };
       }
       if (annotations.isEmpty) {
         message = effectivelabel;

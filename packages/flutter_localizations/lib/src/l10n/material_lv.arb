@@ -144,6 +144,9 @@
   "expandedHint": "Sakļauts",
   "collapsedHint": "Izvērsts",
   "menuDismissLabel": "Nerādīt izvēlni",
-  "lookUpButtonLabel": "Look Up",
-  "searchWebButtonLabel": "Search Web"
+  "lookUpButtonLabel": "Meklēt",
+  "searchWebButtonLabel": "Meklēt tīmeklī",
+  "shareButtonLabel": "Kopīgot…",
+  "clearButtonTooltip": "Clear text",
+  "selectedDateLabel": "Selected"
 }

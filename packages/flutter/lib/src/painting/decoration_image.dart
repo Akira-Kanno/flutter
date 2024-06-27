@@ -40,9 +40,6 @@ enum ImageRepeat {
 @immutable
 class DecorationImage {
   /// Creates an image to show in a [BoxDecoration].
-  ///
-  /// The [image], [alignment], [repeat], and [matchTextDirection] arguments
-  /// must not be null.
   const DecorationImage({
     required this.image,
     this.onError,
@@ -54,7 +51,7 @@ class DecorationImage {
     this.matchTextDirection = false,
     this.scale = 1.0,
     this.opacity = 1.0,
-    this.filterQuality = FilterQuality.low,
+    this.filterQuality = FilterQuality.medium,
     this.invertColors = false,
     this.isAntiAlias = false,
   });
@@ -151,8 +148,7 @@ class DecorationImage {
 
   /// Used to set the filterQuality of the image.
   ///
-  /// Defaults to [FilterQuality.low] to scale the image, which corresponds to
-  /// bilinear interpolation.
+  /// Defaults to [FilterQuality.medium].
   final FilterQuality filterQuality;
 
   /// Whether the colors of the image are inverted when drawn.
@@ -173,9 +169,9 @@ class DecorationImage {
 
   /// Creates a [DecorationImagePainter] for this [DecorationImage].
   ///
-  /// The `onChanged` argument must not be null. It will be called whenever the
-  /// image needs to be repainted, e.g. because it is loading incrementally or
-  /// because it is animated.
+  /// The `onChanged` argument will be called whenever the image needs to be
+  /// repainted, e.g. because it is loading incrementally or because it is
+  /// animated.
   DecorationImagePainter createPainter(VoidCallback onChanged) {
     return _DecorationImagePainter._(this, onChanged);
   }
@@ -314,7 +310,17 @@ abstract interface class DecorationImagePainter {
 }
 
 class _DecorationImagePainter implements DecorationImagePainter {
-  _DecorationImagePainter._(this._details, this._onChanged);
+  _DecorationImagePainter._(this._details, this._onChanged) {
+    // TODO(polina-c): stop duplicating code across disposables
+    // https://github.com/flutter/flutter/issues/137435
+    if (kFlutterMemoryAllocationsEnabled) {
+      FlutterMemoryAllocations.instance.dispatchObjectCreated(
+        library: 'package:flutter/painting.dart',
+        className: '$_DecorationImagePainter',
+        object: this,
+      );
+    }
+  }
 
   final DecorationImage _details;
   final VoidCallback _onChanged;
@@ -407,6 +413,9 @@ class _DecorationImagePainter implements DecorationImagePainter {
 
   @override
   void dispose() {
+    if (kFlutterMemoryAllocationsEnabled) {
+      FlutterMemoryAllocations.instance.dispatchObjectDisposed(object: this);
+    }
     _imageStream?.removeListener(ImageStreamListener(
       _handleImage,
       onError: _details.onError,
@@ -498,12 +507,7 @@ void debugFlushLastFrameImageSizeInfo() {
 ///    smart invert on iOS.
 ///
 ///  * `filterQuality`: Use this to change the quality when scaling an image.
-///     Use the [FilterQuality.low] quality setting to scale the image, which corresponds to
-///     bilinear interpolation, rather than the default [FilterQuality.none] which corresponds
-///     to nearest-neighbor.
-///
-/// The `canvas`, `rect`, `image`, `scale`, `alignment`, `repeat`, `flipHorizontally` and `filterQuality`
-/// arguments must not be null.
+///     Defaults to [FilterQuality.medium].
 ///
 /// See also:
 ///
@@ -524,7 +528,7 @@ void paintImage({
   ImageRepeat repeat = ImageRepeat.noRepeat,
   bool flipHorizontally = false,
   bool invertColors = false,
-  FilterQuality filterQuality = FilterQuality.low,
+  FilterQuality filterQuality = FilterQuality.medium,
   bool isAntiAlias = false,
   BlendMode blendMode = BlendMode.srcOver,
 }) {
@@ -661,7 +665,7 @@ void paintImage({
           },
         );
         _pendingImageSizeInfo = <String, ImageSizeInfo>{};
-      });
+      }, debugLabel: 'paintImage.recordImageSizes');
     }
   }
 
@@ -807,7 +811,17 @@ class _BlendedDecorationImage implements DecorationImage {
 }
 
 class _BlendedDecorationImagePainter implements DecorationImagePainter {
-  _BlendedDecorationImagePainter._(this.a, this.b, this.t);
+  _BlendedDecorationImagePainter._(this.a, this.b, this.t) {
+    // TODO(polina-c): stop duplicating code across disposables
+    // https://github.com/flutter/flutter/issues/137435
+    if (kFlutterMemoryAllocationsEnabled) {
+      FlutterMemoryAllocations.instance.dispatchObjectCreated(
+        library: 'package:flutter/painting.dart',
+        className: '$_BlendedDecorationImagePainter',
+        object: this,
+      );
+    }
+  }
 
   final DecorationImagePainter? a;
   final DecorationImagePainter? b;
@@ -823,6 +837,9 @@ class _BlendedDecorationImagePainter implements DecorationImagePainter {
 
   @override
   void dispose() {
+    if (kFlutterMemoryAllocationsEnabled) {
+      FlutterMemoryAllocations.instance.dispatchObjectDisposed(object: this);
+    }
     a?.dispose();
     b?.dispose();
   }

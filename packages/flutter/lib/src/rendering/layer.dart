@@ -85,10 +85,10 @@ const String _flutterRenderingLibrary = 'package:flutter/rendering.dart';
 /// different parents. The scene must be explicitly recomposited after such
 /// changes are made; the layer tree does not maintain its own dirty state.
 ///
-/// To composite the tree, create a [SceneBuilder] object, pass it to the
-/// root [Layer] object's [addToScene] method, and then call
-/// [SceneBuilder.build] to obtain a [Scene]. A [Scene] can then be painted
-/// using [dart:ui.FlutterView.render].
+/// To composite the tree, create a [SceneBuilder] object using
+/// [RendererBinding.createSceneBuilder], pass it to the root [Layer] object's
+/// [addToScene] method, and then call [SceneBuilder.build] to obtain a [Scene].
+/// A [Scene] can then be painted using [dart:ui.FlutterView.render].
 ///
 /// ## Memory
 ///
@@ -140,7 +140,7 @@ abstract class Layer with DiagnosticableTreeMixin {
   /// Creates an instance of Layer.
   Layer() {
     if (kFlutterMemoryAllocationsEnabled) {
-      MemoryAllocations.instance.dispatchObjectCreated(
+      FlutterMemoryAllocations.instance.dispatchObjectCreated(
         library: _flutterRenderingLibrary,
         className: '$Layer',
         object: this,
@@ -335,7 +335,7 @@ abstract class Layer with DiagnosticableTreeMixin {
       return true;
     }());
     if (kFlutterMemoryAllocationsEnabled) {
-      MemoryAllocations.instance.dispatchObjectDisposed(object: this);
+      FlutterMemoryAllocations.instance.dispatchObjectDisposed(object: this);
     }
     _engineLayer?.dispose();
     _engineLayer = null;
@@ -765,6 +765,8 @@ abstract class Layer with DiagnosticableTreeMixin {
 /// layer in [RenderObject.paint], it should dispose of the handle to the
 /// old layer. It should also dispose of any layer handles it holds in
 /// [RenderObject.dispose].
+///
+/// To dispose of a layer handle, set its [layer] property to null.
 class LayerHandle<T extends Layer> {
   /// Create a new layer handle, optionally referencing a [Layer].
   LayerHandle([this._layer]) {
@@ -919,9 +921,9 @@ class PictureLayer extends Layer {
 ///
 /// See also:
 ///
-///  * <https://api.flutter.dev/javadoc/io/flutter/view/TextureRegistry.html>
+///  * [TextureRegistry](/javadoc/io/flutter/view/TextureRegistry.html)
 ///    for how to create and manage backend textures on Android.
-///  * <https://api.flutter.dev/objcdoc/Protocols/FlutterTextureRegistry.html>
+///  * [TextureRegistry Protocol](/ios-embedder/protocol_flutter_texture_registry-p.html)
 ///    for how to create and manage backend textures on iOS.
 class TextureLayer extends Layer {
   /// Creates a texture layer bounded by [rect] and with backend texture
@@ -974,8 +976,6 @@ class TextureLayer extends Layer {
 /// on iOS.
 class PlatformViewLayer extends Layer {
   /// Creates a platform view layer.
-  ///
-  /// The `rect` and `viewId` parameters must not be null.
   PlatformViewLayer({
     required this.rect,
     required this.viewId,
@@ -1014,9 +1014,6 @@ class PerformanceOverlayLayer extends Layer {
   PerformanceOverlayLayer({
     required Rect overlayRect,
     required this.optionsMask,
-    required this.rasterizerThreshold,
-    required this.checkerboardRasterCacheImages,
-    required this.checkerboardOffscreenLayers,
   }) : _overlayRect = overlayRect;
 
   /// The rectangle in this layer's coordinate system that the overlay should occupy.
@@ -1036,40 +1033,9 @@ class PerformanceOverlayLayer extends Layer {
   /// [PerformanceOverlayOption] to enable.
   final int optionsMask;
 
-  /// The rasterizer threshold is an integer specifying the number of frame
-  /// intervals that the rasterizer must miss before it decides that the frame
-  /// is suitable for capturing an SkPicture trace for further analysis.
-  final int rasterizerThreshold;
-
-  /// Whether the raster cache should checkerboard cached entries.
-  ///
-  /// The compositor can sometimes decide to cache certain portions of the
-  /// widget hierarchy. Such portions typically don't change often from frame to
-  /// frame and are expensive to render. This can speed up overall rendering. However,
-  /// there is certain upfront cost to constructing these cache entries. And, if
-  /// the cache entries are not used very often, this cost may not be worth the
-  /// speedup in rendering of subsequent frames. If the developer wants to be certain
-  /// that populating the raster cache is not causing stutters, this option can be
-  /// set. Depending on the observations made, hints can be provided to the compositor
-  /// that aid it in making better decisions about caching.
-  final bool checkerboardRasterCacheImages;
-
-  /// Whether the compositor should checkerboard layers that are rendered to offscreen
-  /// bitmaps. This can be useful for debugging rendering performance.
-  ///
-  /// Render target switches are caused by using opacity layers (via a [FadeTransition] or
-  /// [Opacity] widget), clips, shader mask layers, etc. Selecting a new render target
-  /// and merging it with the rest of the scene has a performance cost. This can sometimes
-  /// be avoided by using equivalent widgets that do not require these layers (for example,
-  /// replacing an [Opacity] widget with an [widgets.Image] using a [BlendMode]).
-  final bool checkerboardOffscreenLayers;
-
   @override
   void addToScene(ui.SceneBuilder builder) {
     builder.addPerformanceOverlay(optionsMask, overlayRect);
-    builder.setRasterizerTracingThreshold(rasterizerThreshold);
-    builder.setCheckerboardRasterCacheImages(checkerboardRasterCacheImages);
-    builder.setCheckerboardOffscreenLayers(checkerboardOffscreenLayers);
   }
 
   @override
@@ -1079,7 +1045,7 @@ class PerformanceOverlayLayer extends Layer {
 }
 
 /// The signature of the callback added in [Layer.addCompositionCallback].
-typedef CompositionCallback = void Function(Layer);
+typedef CompositionCallback = void Function(Layer layer);
 
 /// A composited layer that has a list of children.
 ///
@@ -1411,8 +1377,6 @@ class ContainerLayer extends Layer {
   /// may explicitly allow null as a value, for example if they know that they
   /// transform all their children identically.
   ///
-  /// The `transform` argument must not be null.
-  ///
   /// Used by [FollowerLayer] to transform its child to a [LeaderLayer]'s
   /// position.
   void applyTransform(Layer? child, Matrix4 transform) {
@@ -1610,7 +1574,7 @@ class ClipRectLayer extends ContainerLayer {
   /// The [clipRect] argument must not be null before the compositing phase of
   /// the pipeline.
   ///
-  /// The [clipBehavior] argument must not be null, and must not be [Clip.none].
+  /// The [clipBehavior] argument must not be [Clip.none].
   ClipRectLayer({
     Rect? clipRect,
     Clip clipBehavior = Clip.hardEdge,
@@ -2341,7 +2305,7 @@ class LayerLink {
       SchedulerBinding.instance.addPostFrameCallback((Duration timeStamp) {
         _debugLeaderCheckScheduled = false;
         assert(_debugPreviousLeaders!.isEmpty);
-      });
+      }, debugLabel: 'LayerLink.leadersCleanUpCheck');
       return true;
     }());
   }
@@ -2368,9 +2332,8 @@ class LayerLink {
 class LeaderLayer extends ContainerLayer {
   /// Creates a leader layer.
   ///
-  /// The [link] property must not be null, and must not have been provided to
-  /// any other [LeaderLayer] layers that are [attached] to the layer tree at
-  /// the same time.
+  /// The [link] property must not have been provided to any other [LeaderLayer]
+  /// layers that are [attached] to the layer tree at the same time.
   ///
   /// The [offset] property must be non-null before the compositing phase of the
   /// pipeline.
@@ -2479,8 +2442,6 @@ class LeaderLayer extends ContainerLayer {
 /// layer at a distance rather than directly overlapping it.
 class FollowerLayer extends ContainerLayer {
   /// Creates a follower layer.
-  ///
-  /// The [link] property must not be null.
   ///
   /// The [unlinkedOffset], [linkedOffset], and [showWhenUnlinked] properties
   /// must be non-null before the compositing phase of the pipeline.
@@ -2805,8 +2766,6 @@ class FollowerLayer extends ContainerLayer {
 /// if [opaque] is true and the layer's annotation is added.
 class AnnotatedRegionLayer<T extends Object> extends ContainerLayer {
   /// Creates a new layer that annotates its children with [value].
-  ///
-  /// The [value] provided cannot be null.
   AnnotatedRegionLayer(
     this.value, {
     this.size,

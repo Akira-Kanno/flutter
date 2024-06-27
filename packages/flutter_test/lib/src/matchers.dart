@@ -14,7 +14,7 @@ import 'package:matcher/expect.dart';
 import 'package:matcher/src/expect/async_matcher.dart'; // ignore: implementation_imports
 import 'package:vector_math/vector_math_64.dart' show Matrix3;
 
-import '_matchers_io.dart' if (dart.library.html) '_matchers_web.dart' show MatchesGoldenFile, captureImage;
+import '_matchers_io.dart' if (dart.library.js_interop) '_matchers_web.dart' show MatchesGoldenFile, captureImage;
 import 'accessibility.dart';
 import 'binding.dart';
 import 'controller.dart';
@@ -538,7 +538,7 @@ Matcher coversSameAreaAs(Path expectedPath, { required Rect areaToCompare, int s
 ///
 /// See also:
 ///
-///  * [GoldenFileComparator], which acts as the backend for this matcher.
+///  * [goldenFileComparator], which acts as the backend for this matcher.
 ///  * [LocalFileComparator], which is the default [GoldenFileComparator]
 ///    implementation for `flutter test`.
 ///  * [matchesReferenceImage], which should be used instead if you want to
@@ -546,12 +546,11 @@ Matcher coversSameAreaAs(Path expectedPath, { required Rect areaToCompare, int s
 ///  * [flutter_test] for a discussion of test configurations, whereby callers
 ///    may swap out the backend for this matcher.
 AsyncMatcher matchesGoldenFile(Object key, {int? version}) {
-  if (key is Uri) {
-    return MatchesGoldenFile(key, version);
-  } else if (key is String) {
-    return MatchesGoldenFile.forStringPath(key, version);
-  }
-  throw ArgumentError('Unexpected type for golden file: ${key.runtimeType}');
+  return switch (key) {
+    Uri()    => MatchesGoldenFile(key, version),
+    String() => MatchesGoldenFile.forStringPath(key, version),
+    _ => throw ArgumentError('Unexpected type for golden file: ${key.runtimeType}'),
+  };
 }
 
 /// Asserts that a [Finder], [Future<ui.Image>], or [ui.Image] matches a
@@ -576,7 +575,9 @@ AsyncMatcher matchesGoldenFile(Object key, {int? version}) {
 ///   final ui.Canvas pictureCanvas = ui.Canvas(recorder);
 ///   pictureCanvas.drawCircle(Offset.zero, 20.0, paint);
 ///   final ui.Picture picture = recorder.endRecording();
+///   addTearDown(picture.dispose);
 ///   ui.Image referenceImage = await picture.toImage(50, 50);
+///   addTearDown(referenceImage.dispose);
 ///
 ///   await expectLater(find.text('Save'), matchesReferenceImage(referenceImage));
 ///   await expectLater(image, matchesReferenceImage(referenceImage));
@@ -598,7 +599,11 @@ AsyncMatcher matchesReferenceImage(ui.Image image) {
 /// provided, then they are not part of the comparison. All of the boolean
 /// flag and action fields must match, and default to false.
 ///
-/// To retrieve the semantics data of a widget, use [WidgetTester.getSemantics]
+/// To find a [SemanticsNode] directly, use [CommonFinders.semantics].
+/// These methods will search the semantics tree directly and avoid the edge
+/// cases that [SemanticsController.find] sometimes runs into.
+///
+/// To retrieve the semantics data of a widget, use [SemanticsController.find]
 /// with a [Finder] that returns a single widget. Semantics must be enabled
 /// in order to use this method.
 ///
@@ -618,6 +623,7 @@ AsyncMatcher matchesReferenceImage(ui.Image image) {
 ///   * [SemanticsController.find] under [WidgetTester.semantics], the tester method which retrieves semantics.
 ///   * [containsSemantics], a similar matcher without default values for flags or actions.
 Matcher matchesSemantics({
+  String? identifier,
   String? label,
   AttributedString? attributedLabel,
   String? hint,
@@ -668,6 +674,7 @@ Matcher matchesSemantics({
   bool isExpanded = false,
   // Actions //
   bool hasTapAction = false,
+  bool hasFocusAction = false,
   bool hasLongPressAction = false,
   bool hasScrollLeftAction = false,
   bool hasScrollRightAction = false,
@@ -695,6 +702,7 @@ Matcher matchesSemantics({
   List<Matcher>? children,
 }) {
   return _MatchesSemanticsData(
+    identifier: identifier,
     label: label,
     attributedLabel: attributedLabel,
     hint: hint,
@@ -746,6 +754,7 @@ Matcher matchesSemantics({
     isExpanded: isExpanded,
     // Actions
     hasTapAction: hasTapAction,
+    hasFocusAction: hasFocusAction,
     hasLongPressAction: hasLongPressAction,
     hasScrollLeftAction: hasScrollLeftAction,
     hasScrollRightAction: hasScrollRightAction,
@@ -778,7 +787,11 @@ Matcher matchesSemantics({
 /// There are no default expected values, so no unspecified values will be
 /// validated.
 ///
-/// To retrieve the semantics data of a widget, use [WidgetTester.getSemantics]
+/// To find a [SemanticsNode] directly, use [CommonFinders.semantics].
+/// These methods will search the semantics tree directly and avoid the edge
+/// cases that [SemanticsController.find] sometimes runs into.
+///
+/// To retrieve the semantics data of a widget, use [SemanticsController.find]
 /// with a [Finder] that returns a single widget. Semantics must be enabled
 /// in order to use this method.
 ///
@@ -798,6 +811,7 @@ Matcher matchesSemantics({
 ///   * [SemanticsController.find] under [WidgetTester.semantics], the tester method which retrieves semantics.
 ///   * [matchesSemantics], a similar matcher with default values for flags and actions.
 Matcher containsSemantics({
+  String? identifier,
   String? label,
   AttributedString? attributedLabel,
   String? hint,
@@ -848,6 +862,7 @@ Matcher containsSemantics({
   bool? isExpanded,
   // Actions
   bool? hasTapAction,
+  bool? hasFocusAction,
   bool? hasLongPressAction,
   bool? hasScrollLeftAction,
   bool? hasScrollRightAction,
@@ -875,6 +890,7 @@ Matcher containsSemantics({
   List<Matcher>? children,
 }) {
   return _MatchesSemanticsData(
+    identifier: identifier,
     label: label,
     attributedLabel: attributedLabel,
     hint: hint,
@@ -926,6 +942,7 @@ Matcher containsSemantics({
     isExpanded: isExpanded,
     // Actions
     hasTapAction: hasTapAction,
+    hasFocusAction: hasFocusAction,
     hasLongPressAction: hasLongPressAction,
     hasScrollLeftAction: hasScrollLeftAction,
     hasScrollRightAction: hasScrollRightAction,
@@ -1467,8 +1484,6 @@ double _matrix3Distance(Matrix3 a, Matrix3 b) {
 }
 
 double _sizeDistance(Size a, Size b) {
-  // TODO(a14n): remove ignore when lint is updated, https://github.com/dart-lang/linter/issues/1843
-  // ignore: unnecessary_parenthesis
   final Offset delta = (b - a) as Offset;
   return delta.distance;
 }
@@ -2139,10 +2154,13 @@ class _MatchesReferenceImage extends AsyncMatcher {
   @override
   Future<String?> matchAsync(dynamic item) async {
     Future<ui.Image> imageFuture;
+    final bool disposeImage; // set to true if the matcher created and owns the image and must therefore dispose it.
     if (item is Future<ui.Image>) {
       imageFuture = item;
+      disposeImage = false;
     } else if (item is ui.Image) {
       imageFuture = Future<ui.Image>.value(item);
+      disposeImage = false;
     } else {
       final Finder finder = item as Finder;
       final Iterable<Element> elements = finder.evaluate();
@@ -2152,30 +2170,37 @@ class _MatchesReferenceImage extends AsyncMatcher {
         return 'matched too many widgets';
       }
       imageFuture = captureImage(elements.single);
+      disposeImage = true;
     }
 
     final TestWidgetsFlutterBinding binding = TestWidgetsFlutterBinding.instance;
     return binding.runAsync<String?>(() async {
       final ui.Image image = await imageFuture;
-      final ByteData? bytes = await image.toByteData();
-      if (bytes == null) {
-        return 'could not be encoded.';
-      }
+      try {
+        final ByteData? bytes = await image.toByteData();
+        if (bytes == null) {
+          return 'could not be encoded.';
+        }
 
-      final ByteData? referenceBytes = await referenceImage.toByteData();
-      if (referenceBytes == null) {
-        return 'could not have its reference image encoded.';
-      }
+        final ByteData? referenceBytes = await referenceImage.toByteData();
+        if (referenceBytes == null) {
+          return 'could not have its reference image encoded.';
+        }
 
-      if (referenceImage.height != image.height || referenceImage.width != image.width) {
-        return 'does not match as width or height do not match. $image != $referenceImage';
-      }
+        if (referenceImage.height != image.height || referenceImage.width != image.width) {
+          return 'does not match as width or height do not match. $image != $referenceImage';
+        }
 
-      final int countDifferentPixels = _countDifferentPixels(
-        Uint8List.view(bytes.buffer),
-        Uint8List.view(referenceBytes.buffer),
-      );
-      return countDifferentPixels == 0 ? null : 'does not match on $countDifferentPixels pixels';
+        final int countDifferentPixels = _countDifferentPixels(
+          Uint8List.view(bytes.buffer),
+          Uint8List.view(referenceBytes.buffer),
+        );
+        return countDifferentPixels == 0 ? null : 'does not match on $countDifferentPixels pixels';
+      } finally {
+        if (disposeImage) {
+          image.dispose();
+        }
+      }
     });
   }
 
@@ -2187,6 +2212,7 @@ class _MatchesReferenceImage extends AsyncMatcher {
 
 class _MatchesSemanticsData extends Matcher {
   _MatchesSemanticsData({
+    required this.identifier,
     required this.label,
     required this.attributedLabel,
     required this.hint,
@@ -2237,6 +2263,11 @@ class _MatchesSemanticsData extends Matcher {
     required bool? isExpanded,
     // Actions
     required bool? hasTapAction,
+    // TODO(gspencergoog): Once this has landed, and customer tests have been
+    // updated, remove the ignore below.
+    // https://github.com/flutter/flutter/issues/149842
+    // ignore: avoid_unused_constructor_parameters
+    required bool? hasFocusAction,
     required bool? hasLongPressAction,
     required bool? hasScrollLeftAction,
     required bool? hasScrollRightAction,
@@ -2295,6 +2326,9 @@ class _MatchesSemanticsData extends Matcher {
         },
         actions = <SemanticsAction, bool>{
           if (hasTapAction != null) SemanticsAction.tap: hasTapAction,
+          // TODO(gspencergoog): Once this has landed, and customer tests have
+          // been updated, add a line here that adds handling for
+          // hasFocusAction. https://github.com/flutter/flutter/issues/149842
           if (hasLongPressAction != null) SemanticsAction.longPress: hasLongPressAction,
           if (hasScrollLeftAction != null) SemanticsAction.scrollLeft: hasScrollLeftAction,
           if (hasScrollRightAction != null) SemanticsAction.scrollRight: hasScrollRightAction,
@@ -2324,6 +2358,7 @@ class _MatchesSemanticsData extends Matcher {
                 onLongPressHint: onLongPressHint,
               );
 
+  final String? identifier;
   final String? label;
   final AttributedString? attributedLabel;
   final String? hint;
@@ -2356,8 +2391,8 @@ class _MatchesSemanticsData extends Matcher {
   final Map<SemanticsFlag, bool> flags;
 
   @override
-  Description describe(Description description) {
-    description.add('has semantics');
+  Description describe(Description description, [String? index]) {
+    description.add('${index == null ? '' : 'Child $index '}has semantics');
     if (label != null) {
       description.add(' with label: $label');
     }
@@ -2391,12 +2426,19 @@ class _MatchesSemanticsData extends Matcher {
     if (tooltip != null) {
       description.add(' with tooltip: $tooltip');
     }
-    if (actions.isNotEmpty) {
-      final List<SemanticsAction> expectedActions = actions.entries
+    // TODO(gspencergoog): Remove filter once customer tests have been updated
+    // with the proper actions information for focus.
+    // https://github.com/flutter/flutter/issues/149842
+    final Map<ui.SemanticsAction, bool> nonFocusActions =
+      Map<ui.SemanticsAction, bool>.fromEntries(actions.entries.where(
+        (MapEntry<ui.SemanticsAction, bool> e) => e.key != SemanticsAction.focus
+      ));
+    if (nonFocusActions.isNotEmpty) {
+      final List<SemanticsAction> expectedActions = nonFocusActions.entries
         .where((MapEntry<ui.SemanticsAction, bool> e) => e.value)
         .map((MapEntry<ui.SemanticsAction, bool> e) => e.key)
         .toList();
-      final List<SemanticsAction> notExpectedActions = actions.entries
+      final List<SemanticsAction> notExpectedActions = nonFocusActions.entries
         .where((MapEntry<ui.SemanticsAction, bool> e) => !e.value)
         .map((MapEntry<ui.SemanticsAction, bool> e) => e.key)
         .toList();
@@ -2456,9 +2498,15 @@ class _MatchesSemanticsData extends Matcher {
       description.add(' with custom hints: $hintOverrides');
     }
     if (children != null) {
-      description.add(' with children:\n');
-      for (final _MatchesSemanticsData child in children!.cast<_MatchesSemanticsData>()) {
-        child.describe(description);
+      description.add(' with children:\n  ');
+      final List<_MatchesSemanticsData> childMatches = children!.cast<_MatchesSemanticsData>();
+      int childIndex = 1;
+      for (final _MatchesSemanticsData child in childMatches) {
+        child.describe(description, index != null ? '$index:$childIndex': '$childIndex');
+        if (child != childMatches.last) {
+          description.add('\n  ');
+        }
+        childIndex += 1;
       }
     }
     return description;
@@ -2490,7 +2538,13 @@ class _MatchesSemanticsData extends Matcher {
       return failWithDescription(matchState, 'No SemanticsData provided. '
         'Maybe you forgot to enable semantics?');
     }
-    final SemanticsData data = node is SemanticsNode ? node.getSemanticsData() : (node as SemanticsData);
+
+    final SemanticsData data = switch (node) {
+      SemanticsNode() => node.getSemanticsData(),
+      FinderBase<SemanticsNode>() => node.evaluate().single.getSemanticsData(),
+      _ => node as SemanticsData,
+    };
+
     if (label != null && label != data.label) {
       return failWithDescription(matchState, 'label was: ${data.label}');
     }
@@ -2563,10 +2617,17 @@ class _MatchesSemanticsData extends Matcher {
     if (maxValueLength != null && maxValueLength != data.maxValueLength) {
       return failWithDescription(matchState, 'maxValueLength was: ${data.maxValueLength}');
     }
-    if (actions.isNotEmpty) {
+    // TODO(gspencergoog): Remove filter once customer tests have been updated
+    // with the proper actions information for focus.
+    // https://github.com/flutter/flutter/issues/149842
+    final Map<ui.SemanticsAction, bool> nonFocusActions =
+      Map<ui.SemanticsAction, bool>.fromEntries(actions.entries.where(
+        (MapEntry<ui.SemanticsAction, bool> e) => e.key != SemanticsAction.focus
+      ));
+    if (nonFocusActions.isNotEmpty) {
       final List<SemanticsAction> unexpectedActions = <SemanticsAction>[];
       final List<SemanticsAction> missingActions = <SemanticsAction>[];
-      for (final MapEntry<ui.SemanticsAction, bool> actionEntry in actions.entries) {
+      for (final MapEntry<ui.SemanticsAction, bool> actionEntry in nonFocusActions.entries) {
         final ui.SemanticsAction action = actionEntry.key;
         final bool actionExpected = actionEntry.value;
         final bool actionPresent = (action.index & data.actions) == action.index;

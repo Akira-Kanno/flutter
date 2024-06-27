@@ -22,8 +22,8 @@ import 'object.dart';
 class StackFrame {
   /// Creates a new StackFrame instance.
   ///
-  /// All parameters must not be null. The [className] may be the empty string
-  /// if there is no class (e.g. for a top level library method).
+  /// The [className] may be the empty string if there is no class (e.g. for a
+  /// top level library method).
   const StackFrame({
     required this.number,
     required this.column,
@@ -89,7 +89,9 @@ class StackFrame {
   ///
   /// Returns null if format is not as expected.
   static StackFrame? _tryParseWebFrame(String line) {
-    if (kDebugMode) {
+    // dart2wasm doesn't emit stack frames in the same way DDC does, so we need
+    // to do the less clever non-debug path here when compiled to wasm.
+    if (kDebugMode && !kIsWasm) {
       return _tryParseWebDebugFrame(line);
     } else {
       return _tryParseWebNonDebugFrame(line);

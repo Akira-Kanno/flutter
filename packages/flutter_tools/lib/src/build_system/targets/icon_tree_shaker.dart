@@ -28,8 +28,6 @@ List<Map<String, Object?>> _getList(Object? object, String errorMessage) {
 class IconTreeShaker {
   /// Creates a wrapper for icon font subsetting.
   ///
-  /// The environment parameter must not be null.
-  ///
   /// If the `fontManifest` parameter is null, [enabled] will return false since
   /// there are no fonts to shake.
   ///
@@ -138,15 +136,15 @@ class IconTreeShaker {
       if (codePoints == null) {
         throw IconTreeShakerException._('Expected to font code points for ${entry.key}, but none were found.');
       }
-      if (_targetPlatform == TargetPlatform.web_javascript) {
-        if (!codePoints.contains(kSpacePoint)) {
-          codePoints.add(kSpacePoint);
-        }
-      }
+
+      // Add space as an optional code point, as web uses it to measure the font height.
+      final List<int> optionalCodePoints = _targetPlatform == TargetPlatform.web_javascript
+        ? <int>[kSpacePoint] : <int>[];
       result[entry.value] = _IconTreeShakerData(
         family: entry.key,
         relativePath: entry.value,
         codePoints: codePoints,
+        optionalCodePoints: optionalCodePoints,
       );
     }
     _iconData = result;
@@ -197,12 +195,17 @@ class IconTreeShaker {
       outputPath,
       input.path,
     ];
-    final String codePoints = iconTreeShakerData.codePoints.join(' ');
+    final Iterable<String> requiredCodePointStrings = iconTreeShakerData.codePoints
+      .map((int codePoint) => codePoint.toString());
+    final Iterable<String> optionalCodePointStrings = iconTreeShakerData.optionalCodePoints
+      .map((int codePoint) => 'optional:$codePoint');
+    final String codePointsString = requiredCodePointStrings
+      .followedBy(optionalCodePointStrings).join(' ');
     _logger.printTrace('Running font-subset: ${cmd.join(' ')}, '
-                       'using codepoints $codePoints');
+                       'using codepoints $codePointsString');
     final Process fontSubsetProcess = await _processManager.start(cmd);
     try {
-      fontSubsetProcess.stdin.writeln(codePoints);
+      fontSubsetProcess.stdin.writeln(codePointsString);
       await fontSubsetProcess.stdin.flush();
       await fontSubsetProcess.stdin.close();
     } on Exception {
@@ -324,15 +327,25 @@ class IconTreeShaker {
       final Object? package = iconDataMap['fontPackage'];
       final Object? fontFamily = iconDataMap['fontFamily'];
       final Object? codePoint = iconDataMap['codePoint'];
-      if ((package ?? '') is! String || // Null is ok here.
-          fontFamily is! String ||
+      if ((package ?? '') is! String ||
+          (fontFamily ?? '') is! String ||
           codePoint is! num) {
         throw IconTreeShakerException._(
           'Invalid ConstFinder result. Expected "fontPackage" to be a String, '
           '"fontFamily" to be a String, and "codePoint" to be an int, '
           'got: $iconDataMap.');
       }
-      final String family = fontFamily;
+      if (fontFamily == null) {
+        _logger.printTrace(
+          'Expected to find fontFamily for constant IconData with codepoint: '
+          '$codePoint, but found fontFamily: $fontFamily. This usually means '
+          'you are relying on the system font. Alternatively, font families in '
+          'an IconData class can be provided in the assets section of your '
+          'pubspec.yaml, or you are missing "uses-material-design: true".',
+        );
+        continue;
+      }
+      final String family = fontFamily as String;
       final String key = package == null
         ? family
         : 'packages/$package/$family';
@@ -369,6 +382,7 @@ class _IconTreeShakerData {
     required this.family,
     required this.relativePath,
     required this.codePoints,
+    required this.optionalCodePoints,
   });
 
   /// The font family name, e.g. "MaterialIcons".
@@ -379,6 +393,10 @@ class _IconTreeShakerData {
 
   /// The list of code points for the font.
   final List<int> codePoints;
+
+  /// The list of code points to be optionally added, if they exist in the
+  /// input font. Otherwise, the tool will silently omit them.
+  final List<int> optionalCodePoints;
 
   @override
   String toString() => 'FontSubsetData($family, $relativePath, $codePoints)';

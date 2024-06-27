@@ -17,6 +17,7 @@ final TwoDimensionalChildBuilderDelegate builderDelegate = TwoDimensionalChildBu
   maxYIndex: 5,
   builder: (BuildContext context, ChildVicinity vicinity) {
     return Container(
+      key: ValueKey<ChildVicinity>(vicinity),
       color: vicinity.xIndex.isEven && vicinity.yIndex.isEven
         ? Colors.amber[100]
         : (vicinity.xIndex.isOdd && vicinity.yIndex.isOdd
@@ -83,6 +84,7 @@ class SimpleBuilderTableView extends TwoDimensionalScrollView {
     this.applyDimensions = true,
     this.forgetToLayoutChild = false,
     this.setLayoutOffset = true,
+    super.hitTestBehavior,
   }) : super(delegate: delegate);
 
   // Piped through for testing in RenderTwoDimensionalViewport
@@ -193,6 +195,18 @@ class RenderSimpleBuilderTableViewport extends RenderTwoDimensionalViewport {
   RenderBox? testGetChildFor(ChildVicinity vicinity) => getChildFor(vicinity);
 
   @override
+  TestExtendedParentData parentDataOf(RenderBox child) {
+    return super.parentDataOf(child) as TestExtendedParentData;
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! TestExtendedParentData) {
+      child.parentData = TestExtendedParentData();
+    }
+  }
+
+  @override
   void layoutChildSequence() {
     // Really simple table implementation for testing.
     // Every child is 200x200 square
@@ -223,12 +237,12 @@ class RenderSimpleBuilderTableViewport extends RenderTwoDimensionalViewport {
       double yLayoutOffset = (leadingRow * 200) - verticalOffset.pixels;
       for (int row = leadingRow; row <= trailingRow; row++) {
         final ChildVicinity vicinity = ChildVicinity(xIndex: column, yIndex: row);
-        final RenderBox child = buildOrObtainChildFor(vicinity)!;
+        final RenderBox? child = buildOrObtainChildFor(vicinity);
         if (!forgetToLayoutChild) {
-          child.layout(constraints.tighten(width: 200.0, height: 200.0));
+          child?.layout(constraints.tighten(width: 200.0, height: 200.0));
         }
 
-        if (setLayoutOffset) {
+        if (setLayoutOffset && child != null) {
           parentDataOf(child).layoutOffset = Offset(xLayoutOffset, yLayoutOffset);
         }
         yLayoutOffset += 200;
@@ -465,6 +479,71 @@ class KeepAliveCheckBoxState extends State<KeepAliveCheckBox> with AutomaticKeep
           });
         }
       },
+    );
+  }
+}
+
+// TwoDimensionalViewportParentData already mixes in KeepAliveParentDataMixin,
+// and so should be compatible with both the KeepAlive and
+// TestParentDataWidget ParentDataWidgets.
+// This ParentData is set up above as part of the
+// RenderSimpleBuilderTableViewport for testing.
+class TestExtendedParentData extends TwoDimensionalViewportParentData {
+  int? testValue;
+}
+
+class TestParentDataWidget extends ParentDataWidget<TestExtendedParentData> {
+  const TestParentDataWidget({
+    super.key,
+    required super.child,
+    this.testValue,
+  });
+
+  final int? testValue;
+
+  @override
+  void applyParentData(RenderObject renderObject) {
+    assert(renderObject.parentData is TestExtendedParentData);
+    final TestExtendedParentData parentData = renderObject.parentData! as TestExtendedParentData;
+    parentData.testValue = testValue;
+  }
+
+  @override
+  Type get debugTypicalAncestorWidgetClass => SimpleBuilderTableViewport;
+}
+
+class KeepAliveOnlyWhenHovered extends StatefulWidget {
+  const KeepAliveOnlyWhenHovered({ required this.child, super.key });
+
+  final Widget child;
+
+  @override
+  KeepAliveOnlyWhenHoveredState createState() => KeepAliveOnlyWhenHoveredState();
+}
+
+class KeepAliveOnlyWhenHoveredState extends State<KeepAliveOnlyWhenHovered> with AutomaticKeepAliveClientMixin {
+  bool _hovered = false;
+
+  @override
+  bool get wantKeepAlive => _hovered;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return MouseRegion(
+      onEnter: (_) {
+        setState(() {
+          _hovered = true;
+          updateKeepAlive();
+        });
+      },
+      onExit: (_) {
+        setState(() {
+          _hovered = false;
+          updateKeepAlive();
+        });
+      },
+      child: widget.child,
     );
   }
 }
